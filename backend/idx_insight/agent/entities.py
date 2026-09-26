@@ -1,0 +1,143 @@
+"""Entity resolution: tickers, company aliases and sectors.
+
+Aliases are agent knowledge; existence and sector membership are verified
+against Sectors through ``SectorsService`` (never assumed).
+"""
+
+from __future__ import annotations
+
+import re
+
+from idx_insight.agent.state import AgentState, AmbiguousMention, Entities, ResolvedCompany
+from idx_insight.sectors.schemas import bare_symbol
+from idx_insight.sectors.service import SectorsService
+
+# alias (lowercase) -> candidate tickers. More than one candidate = ambiguous.
+COMPANY_ALIASES: dict[str, list[str]] = {
+    "bank central asia": ["BBCA"],
+    "bca": ["BBCA"],
+    "bank rakyat indonesia": ["BBRI"],
+    "bri": ["BBRI"],
+    "bank mandiri": ["BMRI"],
+    "mandiri": ["BMRI"],
+    "bank negara indonesia": ["BBNI"],
+    "bni": ["BBNI"],
+    "bank tabungan negara": ["BBTN"],
+    "btn": ["BBTN"],
+    "bank syariah indonesia": ["BRIS"],
+    "bsi": ["BRIS"],
+    "btpn syariah": ["BTPS"],
+    "bank syariah": ["BRIS", "BTPS"],
+    "telkom": ["TLKM"],
+}
+
+# phrase (lowercase) -> sub_sector slug (Sectors uses kebab-case slugs, e.g. "banks")
+SECTOR_ALIASES: dict[str, str] = {
+    "perbankan": "banks",
+    "bank-bank": "banks",
+    "sektor bank": "banks",
+    "banking": "banks",
+    "banks": "banks",
+    "telekomunikasi": "telecommunication",
+    "telecommunication": "telecommunication",
+    "telco": "telecommunication",
+}
+
+# Upper-case 4-letter tokens that are finance jargon, not tickers.
+NON_TICKERS = {
+    "CASA", "BOPO", "EBIT", "IHSG", "BUMN", "RUPS", "RUPST", "LQ45", "NSFR", "TBK",
+    "NPL", "ROA", "ROE", "NIM", "LDR", "CAR", "YOY", "QOQ", "EPS", "OJK", "WIB",
+}
+
+_TICKER_RE = re.compile(r"\b([A-Za-z]{4})(?:\.JK)?\b")
+
+
+class EntityResolver:
+    def __init__(self, service: SectorsService) -> None:
+        self.service = service
+
+    def resolve(self, state: AgentState) -> Entities:
+        text = state.query
+        lowered = text.lower()
+        entities = Entities()
+        seen: set[str] = set()
+
+        def add(symbol: str, matched: str, method: str) -> None:
+            if symbol not in seen:
+                seen.add(symbol)
+                entities.companies.append(
+                    ResolvedCompany(symbol=symbol, matched_text=matched, method=method)  # type: ignore[arg-type]
+                )
+
+        # 1) Aliases, longest first so "bank syariah indonesia" wins over "bank syariah".
+        consumed = lowered
+        for alias in sorted(COMPANY_ALIASES, key=len, reverse=True):
+            pattern = rf"\b{re.escape(alias)}\b"
+            if re.search(pattern, consumed):
+                candidates = COMPANY_ALIASES[alias]
+                if len(candidates) == 1:
+                    add(candidates[0], alias, "alias")
+                else:
+                    entities.ambiguous.append(AmbiguousMention(text=alias, candidates=candidates))
+                consumed = re.sub(pattern, " ", consumed)
+
+        # 2) Explicit tickers (upper-case in the query, or matching the watchlist).
+        known = set(COMPANY_ALIASES_TICKERS)
+        for match in _TICKER_RE.finditer(text):
+            token = match.group(1)
+            upper = token.upper()
+            if upper in NON_TICKERS:
+                continue
+            if token.isupper() or upper in known:
+                if upper in known:
+                    add(upper, token, "ticker")
+                elif token.isupper():
+                    entities.unknown.append(upper)
+
+        for sym in state.watchlist:
+            add(bare_symbol(sym), sym, "ticker")
+
+        # 3) Sector.
+        for phrase in sorted(SECTOR_ALIASES, key=len, reverse=True):
+            if re.search(rf"\b{re.escape(phrase)}\b", lowered):
+                entities.sub_sector = SECTOR_ALIASES[phrase]
+                entities.sector_text = phrase
+                break
+        if state.requested_sub_sector:
+            entities.sub_sector = state.requested_sub_sector
+
+        # 4) Verify unknown upper-case tokens against Sectors (bounded: max 3).
+        still_unknown = []
+        for token in dict.fromkeys(entities.unknown).keys():
+            if len(still_unknown) >= 3:
+                still_unknown.append(token)
+                continue
+            result = self.service.company_report(token, ("overview",))
+            if result.ok and result.data is not None:
+                add(token, token, "ticker")
+                if result.data.company_name:
+                    entities.companies[-1].company_name = result.data.company_name
+            else:
+                still_unknown.append(token)
+        entities.unknown = still_unknown
+        return entities
+
+    def verify_sub_sector(self, slug: str) -> bool:
+        result = self.service.list_subsectors()
+        return bool(result.ok and result.data and slug in result.data)
+
+    def sector_members(self, slug: str) -> list[ResolvedCompany] | None:
+        result = self.service.list_companies(slug)
+        if not result.ok or result.data is None:
+            return None
+        return [
+            ResolvedCompany(
+                symbol=bare_symbol(c.symbol), matched_text=slug, method="sector_member",
+                company_name=c.company_name,
+            )
+            for c in result.data
+        ]
+
+
+# Tickers the agent can recognise from lower-case text without verification.
+COMPANY_ALIASES_TICKERS = sorted({s for v in COMPANY_ALIASES.values() for s in v})
