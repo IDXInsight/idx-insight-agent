@@ -71,8 +71,10 @@ def to_response(state: AgentState, *, data_source: str, llm_provider: str) -> Qu
             accepted=len(state.validation.accepted),
             rejected=len(state.validation.rejected),
             issues=state.validation.issues,
+            assessment=state.validation.assessment,
         ),
         recovery=state.recovery,
+        llm_calls=state.llm_calls,
         trace=state.trace,
         tool_calls=[ToolCallOut(**c.model_dump(include=set(ToolCallOut.model_fields)))
                     for c in state.tool_calls],

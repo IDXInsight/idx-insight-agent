@@ -17,6 +17,7 @@ from idx_insight.analytics.metrics import BUNDLES, KNOWN_UNSUPPORTED, METRICS
 from idx_insight.api.schemas import QueryRequest, QueryResponse
 from idx_insight.api.service import AgentService
 from idx_insight.config import Settings
+from idx_insight.llm.errors import LLMConfigurationError
 from idx_insight.sectors.service import DEFAULT_ALLOWLIST
 
 
@@ -33,7 +34,8 @@ def _build_service(settings: Settings) -> AgentService:
 def get_agent_service(settings: Settings = Depends(get_settings)) -> AgentService:
     try:
         return _build_service(settings)
-    except NotImplementedError as exc:
+    except (NotImplementedError, LLMConfigurationError) as exc:
+        # Messages name the missing setting only; they never contain secret values.
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
@@ -47,13 +49,15 @@ app = FastAPI(
 @app.get("/health")
 def health(settings: Settings = Depends(get_settings)) -> dict:
     return {"status": "ok", "version": __version__, "data_mode": settings.sectors_data_mode,
-            "llm_provider": settings.llm_provider}
+            "llm_provider": settings.llm_provider, "llm_model": settings.llm_model}
 
 
 @app.get("/v1/capabilities")
 def capabilities(settings: Settings = Depends(get_settings)) -> dict:
     return {
         "data_mode": settings.sectors_data_mode,
+        "llm_provider": settings.llm_provider,
+        "llm_providers_supported": ["none", "gemini", "groq"],
         "sectors_tools": sorted(DEFAULT_ALLOWLIST),
         "intents": sorted(ALLOWED),
         "metrics": {name: spec.label for name, spec in METRICS.items()},

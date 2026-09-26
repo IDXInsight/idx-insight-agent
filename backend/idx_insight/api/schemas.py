@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from idx_insight.agent.state import (
     Briefing,
+    EvidenceAssessment,
+    LLMCallRecord,
     RecoveryAction,
     SecondHopDecision,
     TraceStep,
@@ -74,6 +76,7 @@ class ValidationOut(BaseModel):
     accepted: int
     rejected: int
     issues: list[ValidationIssue]
+    assessment: EvidenceAssessment
 
 
 class ToolCallOut(BaseModel):
@@ -96,5 +99,6 @@ class QueryResponse(BaseModel):
     evidence: list[Evidence]
     validation: ValidationOut
     recovery: list[RecoveryAction]
+    llm_calls: list[LLMCallRecord]
     trace: list[TraceStep]
     tool_calls: list[ToolCallOut]
