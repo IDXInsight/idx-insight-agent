@@ -1,7 +1,12 @@
 """InsightAgent — custom orchestration of one research request.
 
 Flow: resolve entities → resolve intent → resolve timeframe → recovery gates →
-plan → execute plan steps → validate evidence → synthesize.
+plan → execute plan steps (discovery → relevance → selective second-hop, or
+financial retrieval → deterministic analytics) → evidence validation and
+sufficiency → synthesis.
+
+The runtime LLM is optional and reached only through ``AgentLLM``; with no
+provider every decision uses the deterministic policies.
 
 Each step is a small method; decisions are written to ``AgentState`` and a
 concise, user-safe trace (never chain-of-thought).
@@ -21,6 +26,7 @@ from idx_insight.agent.discovery import DiscoveryAgent
 from idx_insight.agent.entities import EntityResolver
 from idx_insight.agent.financials import FinancialContext
 from idx_insight.agent.intent import requested_metrics, resolve_intent
+from idx_insight.agent.llm_gateway import AgentLLM
 from idx_insight.agent.planner import build_plan
 from idx_insight.agent.relevance import decide_second_hop, rank_events
 from idx_insight.agent.state import AgentState, Briefing, RecoveryAction
@@ -28,7 +34,7 @@ from idx_insight.agent.synthesis import BOUNDARY_NOTE, synthesize
 from idx_insight.agent.timeframe import resolve_timeframe
 from idx_insight.agent.validator import EvidenceValidator
 from idx_insight.config import Settings
-from idx_insight.llm.base import LLMClient, OfflineLLM
+from idx_insight.llm.base import LLMProvider
 from idx_insight.models import Event
 from idx_insight.sectors.adapter import SectorsAdapter
 from idx_insight.sectors.service import SectorsService
@@ -37,10 +43,11 @@ from idx_insight.sectors.service import SectorsService
 class _Run:
     """Per-request execution context (fresh service, cache and state)."""
 
-    def __init__(self, agent: "InsightAgent", state: AgentState) -> None:
+    def __init__(self, agent: InsightAgent, state: AgentState) -> None:
         self.state = state
-        self.llm = agent.llm
         self.settings = agent.settings
+        self.llm = AgentLLM(agent.llm, state, temperature=agent.settings.llm_temperature,
+                            max_output_tokens=agent.settings.llm_max_output_tokens)
         self.service = SectorsService(agent.adapter, max_calls=agent.settings.max_tool_calls)
         self.entities = EntityResolver(self.service)
         self.financials = FinancialContext(self.service, state, agent.settings.max_requeries)
@@ -90,6 +97,13 @@ class _Run:
                 outcome="Tidak ditemukan; dikeluarkan dari cakupan",
             ))
             s.add_gap("unknown_company", f"Kode {token} tidak ditemukan di Sectors.", token)
+        for token in s.entities.unverified:
+            s.recovery.append(RecoveryAction(
+                trigger="unknown_company", target=token,
+                action="Verifikasi gagal atau melebihi batas verifikasi",
+                outcome="Dikeluarkan dari cakupan; tidak diasumsikan valid",
+            ))
+            s.add_gap("unverified_company", f"Kode {token} tidak dapat diverifikasi.", token)
         for label in s.intent.unsupported_metrics:
             s.recovery.append(RecoveryAction(
                 trigger="unsupported_metric", target=label,
@@ -155,12 +169,13 @@ class _Run:
     def step_second_hop_context(self) -> None:
         s = self.state
         self.second_hop_symbols = decide_second_hop(
-            s, self.service.budget_remaining, self.settings.max_second_hop)
+            s, self.service.budget_remaining, self.settings.max_second_hop, self.llm)
         if not self.second_hop_symbols:
             s.add_trace("Second-hop analysis", "tidak ada peristiwa yang membutuhkan riset lanjutan",
                         "skipped")
             return
-        s.add_trace("Second-hop analysis selected", ", ".join(self.second_hop_symbols))
+        source = next((d.source for d in s.second_hop), "rules")
+        s.add_trace(f"Second-hop analysis selected ({source})", ", ".join(self.second_hop_symbols))
         second_hop_context(s, self.financials, self.second_hop_symbols)
         s.add_trace("Financial context retrieved", f"{len(s.evidence)} bukti tercatat")
 
@@ -201,8 +216,9 @@ class _Run:
         report = EvidenceValidator(self.state).validate()
         self.state.add_trace(
             "Evidence validated",
-            f"{len(report.accepted)} klaim diterima, {len(report.rejected)} ditolak",
-            "ok" if report.status == "passed" else "warning",
+            f"{len(report.accepted)} klaim diterima, {len(report.rejected)} ditolak; "
+            f"kecukupan bukti: {report.assessment.sufficiency}",
+            "ok" if report.assessment.sufficiency == "sufficient" else "warning",
         )
 
     def step_synthesize(self) -> None:
@@ -212,10 +228,10 @@ class _Run:
 
 
 class InsightAgent:
-    def __init__(self, adapter: SectorsAdapter, llm: LLMClient | None = None,
+    def __init__(self, adapter: SectorsAdapter, llm: LLMProvider | None = None,
                  settings: Settings | None = None) -> None:
         self.adapter = adapter
-        self.llm = llm or OfflineLLM()
+        self.llm = llm  # None → rules-only mode
         self.settings = settings or Settings()
 
     def run(self, query: str, *, as_of: date | None = None, watchlist: list[str] | None = None,
@@ -235,7 +251,7 @@ class InsightAgent:
             state.tool_calls = list(run.service.calls)
             return state
 
-        state.plan = build_plan(state, self.llm)
+        state.plan = build_plan(state, run.llm)
         detail = " → ".join(state.plan.names)
         if state.plan.rejected_llm_plan:
             detail += f" (usulan LLM ditolak: {state.plan.rejected_llm_plan})"
@@ -250,15 +266,12 @@ class InsightAgent:
 
     @staticmethod
     def _status(state: AgentState) -> str:
-        accepted = state.validation.accepted
-        if not accepted and not (state.intent and state.intent.name == "discovery"
-                                 and not state.discovered_events):
+        sufficiency = state.validation.assessment.sufficiency
+        if sufficiency == "insufficient":
             state.recovery.append(RecoveryAction(
                 trigger="insufficient_evidence", target="briefing",
                 action="Tidak menyusun temuan tanpa bukti",
                 outcome="Kesenjangan data ditampilkan ke pengguna",
             ))
             return "insufficient_evidence"
-        if state.validation.rejected or state.data_gaps or state.conflicts:
-            return "partial"
-        return "completed"
+        return "partial" if sufficiency == "partial" else "completed"

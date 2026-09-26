@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from idx_insight.agent.recovery import record_tool_failure
 from idx_insight.agent.state import AgentState, Conflict, RecoveryAction
 from idx_insight.analytics.metrics import METRICS, MetricSpec
 from idx_insight.analytics.numbers import normalize_ratio, pct_change, safe_div
@@ -64,7 +65,7 @@ class FinancialContext:
         if result.ok:
             data.report, data.report_call = result.data, result.call_id
         else:
-            self._record_failure(symbol, "company report", result.status, result.error)
+            record_tool_failure(self.state, f"company report {symbol}", result.status, symbol)
         return data.report
 
     def quarters(self, symbol: str) -> list[QuarterlyFinancial] | None:
@@ -79,22 +80,9 @@ class FinancialContext:
             if not data.quarters:
                 self.state.add_gap("empty_result", f"Tidak ada data kuartalan untuk {symbol}.", symbol)
         else:
-            self._record_failure(symbol, "quarterly financials", result.status, result.error)
+            record_tool_failure(self.state, f"quarterly financials {symbol}", result.status,
+                                symbol)
         return data.quarters
-
-    def _record_failure(self, symbol: str, what: str, status: str, error: str | None) -> None:
-        if status == "not_found":
-            self.state.add_gap("unknown_company", f"{symbol} tidak ditemukan di Sectors.", symbol)
-            return
-        trigger = "budget_exhausted" if status == "budget_exhausted" else "tool_error"
-        self.state.recovery.append(RecoveryAction(
-            trigger=trigger, target=f"{what} {symbol}",
-            action="Retry terbatas oleh SectorsService" if trigger == "tool_error"
-            else "Tidak memanggil tool lagi",
-            outcome="Data ditandai tidak tersedia",
-        ))
-        self.state.add_gap(trigger, f"{what.capitalize()} {symbol} tidak dapat diambil ({status}).",
-                           symbol)
 
     def sub_sector(self, symbol: str) -> str | None:
         report = self.report(symbol)

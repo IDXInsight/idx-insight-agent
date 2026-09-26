@@ -1,13 +1,14 @@
 from datetime import date
 
-from conftest import AS_OF, ScriptedLLM
+from conftest import AS_OF, gateway
 
 from idx_insight.agent.entities import EntityResolver
 from idx_insight.agent.intent import requested_metrics, resolve_intent, rule_intent
 from idx_insight.agent.prompts import IntentProposal
 from idx_insight.agent.state import AgentState
 from idx_insight.agent.timeframe import resolve_timeframe
-from idx_insight.llm.base import OfflineLLM
+from idx_insight.llm.errors import LLMRateLimitError
+from idx_insight.llm.mock import MockLLMProvider
 from idx_insight.sectors import MockSectorsAdapter, SectorsService
 
 
@@ -126,20 +127,40 @@ def test_llm_refines_low_confidence_intent():
     q = "BBCA dan BBRI"
     entities, _ = resolve(q)
     assert rule_intent(q, entities).confidence == "low"
-    llm = ScriptedLLM({"IntentProposal": IntentProposal(intent="discovery", rationale="x")})
-    intent = resolve_intent(q, entities, llm)
+    provider = MockLLMProvider(
+        {"intent": MockLLMProvider.structured(IntentProposal(intent="discovery", rationale="x"))})
+    intent = resolve_intent(q, entities, gateway(provider))
     assert intent.name == "discovery" and intent.source == "llm"
 
 
 def test_llm_not_consulted_when_rules_are_confident():
     q = "Bandingkan BBCA dan BBRI"
     entities, _ = resolve(q)
-    llm = ScriptedLLM({"IntentProposal": IntentProposal(intent="discovery", rationale="x")})
-    assert resolve_intent(q, entities, llm).name == "peer_comparison"
-    assert llm.calls == []
+    provider = MockLLMProvider(
+        {"intent": MockLLMProvider.structured(IntentProposal(intent="discovery", rationale="x"))})
+    assert resolve_intent(q, entities, gateway(provider)).name == "peer_comparison"
+    assert provider.requests == []
 
 
-def test_offline_llm_keeps_rule_intent():
+def test_rules_only_mode_keeps_rule_intent():
     q = "BBCA dan BBRI"
     entities, _ = resolve(q)
-    assert resolve_intent(q, entities, OfflineLLM()).source == "rules"
+    assert resolve_intent(q, entities, gateway(None)).source == "rules"
+
+
+def test_malformed_intent_reply_falls_back_to_rules():
+    q = "BBCA dan BBRI"
+    entities, _ = resolve(q)
+    provider = MockLLMProvider({"intent": MockLLMProvider.structured({"intent": "buy_now"})})
+    llm = gateway(provider)
+    intent = resolve_intent(q, entities, llm)
+    assert intent.source == "rules"
+    assert llm.state.llm_calls[0].status == "invalid_structured_output"
+
+
+def test_provider_error_falls_back_to_rules():
+    q = "BBCA dan BBRI"
+    entities, _ = resolve(q)
+    llm = gateway(MockLLMProvider({"intent": LLMRateLimitError("groq HTTP 429")}))
+    assert resolve_intent(q, entities, llm).source == "rules"
+    assert llm.state.llm_calls[0].status == "rate_limit"

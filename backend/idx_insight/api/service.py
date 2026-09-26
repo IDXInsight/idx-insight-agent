@@ -14,16 +14,16 @@ from idx_insight.api.schemas import (
     ValidationOut,
 )
 from idx_insight.config import Settings
-from idx_insight.llm import LLMClient, build_llm
+from idx_insight.llm import LLMProvider, build_llm_provider
 from idx_insight.sectors import SectorsAdapter, build_adapter
 
 
 class AgentService:
     def __init__(self, settings: Settings, adapter: SectorsAdapter | None = None,
-                 llm: LLMClient | None = None) -> None:
+                 llm: LLMProvider | None = None) -> None:
         self.settings = settings
         self.adapter = adapter or build_adapter(settings)
-        self.llm = llm or build_llm(settings)
+        self.llm = llm if llm is not None else build_llm_provider(settings)
         self.agent = InsightAgent(self.adapter, llm=self.llm, settings=settings)
 
     def run(self, request: QueryRequest) -> AgentState:
@@ -32,7 +32,7 @@ class AgentService:
 
     def query(self, request: QueryRequest) -> QueryResponse:
         return to_response(self.run(request), data_source=self.adapter.name,
-                           llm_provider=self.llm.name)
+                           llm_provider=self.llm.name if self.llm else "none")
 
 
 def to_response(state: AgentState, *, data_source: str, llm_provider: str) -> QueryResponse:

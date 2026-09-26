@@ -8,9 +8,9 @@ rule-based plan is used. Either way the chosen plan is recorded in state.
 
 from __future__ import annotations
 
+from idx_insight.agent.llm_gateway import AgentLLM
 from idx_insight.agent.prompts import PLAN_SYSTEM, PlanProposal
 from idx_insight.agent.state import AgentState, Plan, PlanStep
-from idx_insight.llm.base import LLMClient
 
 CANONICAL_ORDER = [
     "retrieve_financial_context",
@@ -85,13 +85,14 @@ def check_plan(intent: str, steps: list[str]) -> str | None:
     return None
 
 
-def build_plan(state: AgentState, llm: LLMClient) -> Plan:
+def build_plan(state: AgentState, llm: AgentLLM) -> Plan:
     assert state.intent is not None
     intent = state.intent.name
     rejected: str | None = None
 
-    if llm.available:
-        proposal = llm.structured(
+    if llm.enabled:
+        proposal = llm.decide(
+            "plan",
             system=PLAN_SYSTEM,
             user=(
                 f"Intent: {intent}\n"

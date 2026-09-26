@@ -14,7 +14,7 @@ from idx_insight.agent.state import (
     TraceStep,
     ValidationIssue,
 )
-from idx_insight.models import Evidence, EventType
+from idx_insight.models import EventType, Evidence
 
 
 class QueryRequest(BaseModel):

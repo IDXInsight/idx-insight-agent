@@ -15,7 +15,9 @@ FILINGS_LOOKBACK_DAYS = 14
 DEFAULT_FORWARD_DAYS = 7
 
 _VAGUE = re.compile(r"\b(baru-baru ini|belakangan ini|akhir-akhir ini|recently|lately|segera|soon)\b")
-_N_DAYS_FWD = re.compile(r"(\d{1,3})\s*(hari|days?)\s*(ke depan|kedepan|ahead|mendatang)|next\s+(\d{1,3})\s+days?")
+_N_DAYS_FWD = re.compile(
+    r"(\d{1,3})\s*(hari|days?)\s*(ke depan|kedepan|ahead|mendatang)|next\s+(\d{1,3})\s+days?"
+)
 _N_DAYS_BACK = re.compile(r"(\d{1,3})\s*(hari|days?)\s*(terakhir|lalu|ago)|(last|past)\s+(\d{1,3})\s+days?")
 _ISO_RANGE = re.compile(r"(\d{4}-\d{2}-\d{2})\s*(?:s/d|sampai|hingga|to|until|-|–)\s*(\d{4}-\d{2}-\d{2})")
 _QUARTER = re.compile(r"\b(?:q|kuartal\s*|triwulan\s*)([1-4])\s*[- ]?\s*(20\d{2})\b")

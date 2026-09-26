@@ -9,7 +9,7 @@ The agent never talks to an adapter directly — it goes through
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Sequence
+from collections.abc import Sequence
 
 from idx_insight.sectors.schemas import (
     CompanyRef,

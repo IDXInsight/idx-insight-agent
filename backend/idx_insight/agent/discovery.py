@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from idx_insight.agent.recovery import record_tool_failure
 from idx_insight.agent.state import AgentState, RecoveryAction
 from idx_insight.analytics.events import event_id
 from idx_insight.analytics.numbers import fmt_idr
@@ -73,7 +74,7 @@ class DiscoveryAgent:
         for sym in symbols:
             result = self.service.corporate_actions(sym)
             if not result.ok or result.data is None:
-                self._tool_gap(f"aksi korporasi {sym}", result.status, sym)
+                record_tool_failure(self.state, f"aksi korporasi {sym}", result.status, sym)
                 continue
             events.extend(self._corporate_events(result.call_id, result.data, tf.start, tf.end))
 
@@ -87,16 +88,6 @@ class DiscoveryAgent:
     def _can_requery(self) -> bool:
         return self.state.requeries_used < self.max_requeries
 
-    def _tool_gap(self, what: str, status: str, symbol: str | None = None) -> None:
-        trigger = "budget_exhausted" if status == "budget_exhausted" else "tool_error"
-        self.state.recovery.append(RecoveryAction(
-            trigger=trigger, target=what,
-            action="Retry terbatas oleh SectorsService" if trigger == "tool_error"
-            else "Tidak memanggil tool lagi",
-            outcome="Dilanjutkan tanpa data ini",
-        ))
-        self.state.add_gap(trigger, f"Data {what} tidak dapat diambil ({status}).", symbol)
-
     def _filings(self, symbols: list[str], sub_sector: str | None, start: date,
                  end: date) -> list[tuple[str, Filing]]:
         out: list[tuple[str, Filing]] = []
@@ -107,7 +98,8 @@ class DiscoveryAgent:
                 result = self.service.filings(start=start.isoformat(), end=end.isoformat(),
                                               limit=FILINGS_PAGE_LIMIT, offset=offset, **query)
                 if not result.ok or result.data is None:
-                    self._tool_gap(f"filing {next(iter(query.values()))}", result.status)
+                    record_tool_failure(self.state, f"filing {next(iter(query.values()))}",
+                                        result.status)
                     break
                 out.extend((result.call_id, f) for f in result.data.results)
                 if not result.data.pagination.has_next:

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import re
 
+from idx_insight.agent.llm_gateway import AgentLLM
 from idx_insight.agent.prompts import INTENT_SYSTEM, IntentProposal
 from idx_insight.agent.state import Entities, Intent
 from idx_insight.analytics.metrics import BUNDLES, KNOWN_UNSUPPORTED, METRICS
-from idx_insight.llm.base import LLMClient
 
 _ADVICE = re.compile(
     r"\b(beli|dibeli|jual|dijual|hold|buy|sell|layak|sebaiknya|rekomendasi|recommend\w*|"
@@ -18,7 +18,9 @@ _DISCOVERY = re.compile(
     r"aksi korporasi|corporate action|rups|agm|dividen|dividend|filing|pengumuman|"
     r"perlu (saya )?(perhatikan|pantau)|watch)\w*"
 )
-_PEER = re.compile(r"\b(bandingkan|perbandingan|membandingkan|compare|comparison|versus|vs\.?|dibanding\w*)\b")
+_PEER = re.compile(
+    r"\b(bandingkan|perbandingan|membandingkan|compare|comparison|versus|vs\.?|dibanding\w*)\b"
+)
 _LIST_ONLY = re.compile(r"\b(daftar saja|list only|tanpa analisis|just list)\b")
 
 _BUNDLE_WORDS: dict[str, str] = {
@@ -76,11 +78,13 @@ def rule_intent(query: str, entities: Entities) -> Intent:
     return Intent(name="clarify", confidence="low", **common)
 
 
-def resolve_intent(query: str, entities: Entities, llm: LLMClient) -> Intent:
+def resolve_intent(query: str, entities: Entities, llm: AgentLLM) -> Intent:
+    """Rules first; the LLM is consulted only when the rules are unsure."""
     intent = rule_intent(query, entities)
-    if intent.confidence == "high" or not llm.available:
+    if intent.confidence == "high" or not llm.enabled:
         return intent
-    proposal = llm.structured(
+    proposal = llm.decide(
+        "intent",
         system=INTENT_SYSTEM,
         user=(
             f"Query: {query}\n"
