@@ -15,6 +15,7 @@ from idx_insight.sectors.schemas import (
     CompanyRef,
     CompanyReport,
     CorporateActions,
+    CorporateActionsCalendar,
     FilingsPage,
     QuarterlyFinancial,
     QuarterlyFinancialDates,
@@ -47,6 +48,7 @@ class SectorsAdapter(ABC):
       get_quarterly_financials   fetch-quarterly-financials
       get_quarterly_financial_dates  fetch-quarterly-financial-dates
       get_corporate_actions      fetch-corporate-actions
+      get_corporate_actions_calendar  REST /v2/corporate-actions/ (market-wide)
       get_filings                fetch-filings
     """
 
@@ -56,7 +58,8 @@ class SectorsAdapter(ABC):
     def list_subsectors(self) -> list[str]: ...
 
     @abstractmethod
-    def list_companies(self, sub_sector: str) -> list[CompanyRef]: ...
+    def list_companies(self, sub_sector: str, limit: int = 12) -> list[CompanyRef]:
+        """Companies in a sub-sector, largest market capitalisation first."""
 
     @abstractmethod
     def get_company_report(
@@ -73,6 +76,12 @@ class SectorsAdapter(ABC):
 
     @abstractmethod
     def get_corporate_actions(self, symbol: str) -> CorporateActions: ...
+
+    @abstractmethod
+    def get_corporate_actions_calendar(
+        self, start: str, end: str, types: Sequence[str] = ("agm", "dividend", "stock_split")
+    ) -> CorporateActionsCalendar:
+        """Corporate actions of every listed company in a window (at most 90 days)."""
 
     @abstractmethod
     def get_filings(

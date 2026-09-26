@@ -16,12 +16,20 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 DataMode = Literal["mock", "real"]
 LLMProviderName = Literal["none", "gemini", "groq"]
 
+# backend/.sectors_local — git-ignored ledger, cache and recordings of real Sectors data.
+DEFAULT_SECTORS_LOCAL_DIR = Path(__file__).resolve().parents[1] / ".sectors_local"
+
 
 class Settings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     sectors_data_mode: DataMode = "mock"
     sectors_api_key: SecretStr | None = None
+    # Credit guardrails for the real Sectors API (see PHASE.md → credit budget).
+    sectors_cache_mode: Literal["readwrite", "replay", "off"] = "readwrite"
+    sectors_max_credits_per_day: int = Field(default=60, ge=0)
+    sectors_max_credits_total: int = Field(default=700, ge=0)
+    sectors_local_dir: Path = DEFAULT_SECTORS_LOCAL_DIR
 
     # Runtime LLM. "none" runs every decision on the deterministic policies.
     llm_provider: LLMProviderName = "none"
@@ -47,6 +55,10 @@ class Settings(BaseModel):
         values: dict[str, object] = {
             "sectors_data_mode": get("SECTORS_DATA_MODE"),
             "sectors_api_key": get("SECTORS_API_KEY"),
+            "sectors_cache_mode": get("SECTORS_CACHE_MODE"),
+            "sectors_max_credits_per_day": get("SECTORS_MAX_CREDITS_PER_DAY"),
+            "sectors_max_credits_total": get("SECTORS_MAX_CREDITS_TOTAL"),
+            "sectors_local_dir": get("SECTORS_LOCAL_DIR"),
             "llm_provider": get("LLM_PROVIDER"),
             "llm_model": get("LLM_MODEL"),
             "gemini_api_key": get("GEMINI_API_KEY"),

@@ -159,6 +159,10 @@ _OVERVIEW = {
 }
 
 
+def market_cap(symbol: str) -> float:
+    return _OVERVIEW[symbol]["market_cap"]
+
+
 def company_report(symbol: str) -> dict:
     info = COMPANIES[symbol]
     ratios = []

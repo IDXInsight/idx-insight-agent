@@ -197,12 +197,38 @@ class CompanyReport(_SectorsModel):
     financials: ReportFinancials | None = None
 
 
-# --- Company listing (MCP: fetch-companies-by-subsector / get-subsectors) ------
-# UNVERIFIED: the response shape of the company listing tool is not modelled from
-# docs yet. CompanyRef is our internal minimum and the real adapter must map to it.
+# --- Company listing (REST: /v2/companies/ screener, /v2/subsectors/) -----------
+# Verified 2026-09-27: the screener returns ``results[]`` with ``symbol``,
+# ``company_name`` and ``query_values`` for the fields used in the query; the
+# subsectors helper returns ``[{"sector": ..., "subsector": ...}]``.
 
 
 class CompanyRef(_SectorsModel):
     symbol: str
     company_name: str
     sub_sector: str
+
+
+# --- /v2/corporate-actions/  (market-wide calendar) --------------------------------
+# Rows use the same keys as the per-symbol endpoint plus ``symbol``; only the
+# requested types are present. Costs 1 credit per requested type.
+
+
+class CalendarAGM(AGM):
+    symbol: str
+
+
+class CalendarDividend(Dividend):
+    symbol: str
+
+
+class CalendarStockSplit(StockSplit):
+    symbol: str
+
+
+class CorporateActionsCalendar(_SectorsModel):
+    start: str
+    end: str
+    agm: list[CalendarAGM] | None = None
+    dividend: list[CalendarDividend] | None = None
+    stock_split: list[CalendarStockSplit] | None = None
