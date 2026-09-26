@@ -4,18 +4,6 @@ from __future__ import annotations
 
 from statistics import median
 
-_AMOUNT_UNITS = {
-    "idr": 1,
-    "thousand": 1_000,
-    "ribu": 1_000,
-    "million": 1_000_000,
-    "juta": 1_000_000,
-    "billion": 1_000_000_000,
-    "miliar": 1_000_000_000,
-    "trillion": 1_000_000_000_000,
-    "triliun": 1_000_000_000_000,
-}
-
 # Ratios are expected as fractions (0.235 = 23.5%). Anything above this
 # magnitude is treated as having been reported in percent.
 _RATIO_PERCENT_THRESHOLD = 1.5
@@ -42,14 +30,6 @@ def spread(a: float | None, b: float | None) -> float | None:
     if a is None or b is None:
         return None
     return a - b
-
-
-def normalize_amount(value: float, unit: str) -> float:
-    """Convert an amount expressed in ``unit`` to plain IDR."""
-    try:
-        return value * _AMOUNT_UNITS[unit.lower()]
-    except KeyError:
-        raise ValueError(f"unknown amount unit {unit!r}") from None
 
 
 def normalize_ratio(value: float | None) -> tuple[float | None, bool]:

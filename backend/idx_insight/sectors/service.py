@@ -16,8 +16,9 @@ Errors never propagate as exceptions to the agent; they come back as a failed
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ValidationError
 

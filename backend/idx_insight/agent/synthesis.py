@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import re
 
+from idx_insight.agent.llm_gateway import AgentLLM
 from idx_insight.agent.prompts import SYNTHESIS_SYSTEM, synthesis_user_prompt
 from idx_insight.agent.state import AgentState, Briefing, BriefingSection, Finding
 from idx_insight.analytics.metrics import METRICS
-from idx_insight.llm.base import LLMClient
 
 BOUNDARY_NOTE = ("Informasi faktual untuk riset berbasis data Sectors — bukan rekomendasi beli, "
                  "jual, atau tahan.")
@@ -99,7 +99,7 @@ def _data_gap_lines(state: AgentState) -> list[str]:
     return list(dict.fromkeys(lines))
 
 
-def synthesize(state: AgentState, llm: LLMClient) -> Briefing:
+def synthesize(state: AgentState, llm: AgentLLM) -> Briefing:
     intent = state.intent.name if state.intent else "clarify"
     sections: list[BriefingSection] = []
     if intent == "discovery":
@@ -139,10 +139,10 @@ def synthesize(state: AgentState, llm: LLMClient) -> Briefing:
         briefing.summary = ("Bukti tidak cukup untuk menyusun temuan. "
                             if intent != "discovery" else "") + briefing.summary
 
-    if llm.available and sections:
+    if llm.enabled and sections:
         facts = [f.text for s in sections for f in s.findings]
-        narrative = llm.generate(system=SYNTHESIS_SYSTEM,
-                                 user=synthesis_user_prompt(state.query, facts, gaps))
+        narrative = llm.write("synthesis", system=SYNTHESIS_SYSTEM,
+                              user=synthesis_user_prompt(state.query, facts, gaps))
         if narrative:
             rejection = guard_narrative(narrative, facts + gaps + assumptions, state.query)
             if rejection is None:

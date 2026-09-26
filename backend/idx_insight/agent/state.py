@@ -56,7 +56,8 @@ class AmbiguousMention(BaseModel):
 class Entities(BaseModel):
     companies: list[ResolvedCompany] = []
     ambiguous: list[AmbiguousMention] = []
-    unknown: list[str] = []
+    unknown: list[str] = []  # verified as not existing in Sectors
+    unverified: list[str] = []  # could not be verified (tool failure or limit)
     sub_sector: str | None = None
     sector_text: str | None = None
 
@@ -99,6 +100,7 @@ class SecondHopDecision(BaseModel):
     symbol: str
     decision: Literal["research", "reuse", "skip"]
     reason: str
+    source: Literal["rules", "llm"] = "rules"
     metrics: list[str] = []
 
 
@@ -106,7 +108,7 @@ class RecoveryAction(BaseModel):
     trigger: Literal[
         "ambiguous_company", "unknown_company", "ambiguous_timeframe", "missing_data",
         "incomplete_response", "tool_error", "empty_result", "conflicting_data",
-        "insufficient_evidence", "budget_exhausted", "unsupported_metric",
+        "insufficient_evidence", "budget_exhausted", "unsupported_metric", "malformed_data",
     ]
     target: str
     action: str
@@ -138,11 +140,35 @@ class ValidationIssue(BaseModel):
     detail: str
 
 
+class EvidenceAssessment(BaseModel):
+    """Whether the evidence is enough to answer, and what is wrong with it if not."""
+
+    sufficiency: Literal["sufficient", "partial", "insufficient"] = "insufficient"
+    incomplete: list[str] = []
+    conflicting: list[str] = []
+    unavailable: list[str] = []
+    malformed: list[str] = []
+
+
 class ValidationReport(BaseModel):
     status: Literal["passed", "partial", "failed", "not_run"] = "not_run"
     accepted: list[str] = []
     rejected: list[str] = []
     issues: list[ValidationIssue] = []
+    assessment: EvidenceAssessment = Field(default_factory=EvidenceAssessment)
+
+
+class LLMCallRecord(BaseModel):
+    """Provider-neutral observability for one LLM call (no prompts, no secrets)."""
+
+    purpose: str
+    provider: str
+    model: str
+    status: str  # "ok" or a normalised error kind
+    latency_ms: float
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    detail: str | None = None
 
 
 class TraceStep(BaseModel):
@@ -203,6 +229,7 @@ class AgentState(BaseModel):
     assumptions: list[str] = []
 
     tool_calls: list[ToolCallRecord] = []
+    llm_calls: list[LLMCallRecord] = []
     trace: list[TraceStep] = []
     briefing: Briefing | None = None
     status: RunStatus = "completed"

@@ -2,11 +2,12 @@ import json
 from datetime import date
 
 import pytest
-from conftest import AS_OF, ScriptedLLM
+from conftest import AS_OF
 
 from idx_insight.agent.state import AgentState, Conflict, Intent, Timeframe
 from idx_insight.agent.synthesis import guard_narrative
 from idx_insight.agent.validator import EvidenceValidator
+from idx_insight.llm.mock import MockLLMProvider
 
 # --- validator (unit) ----------------------------------------------------------
 
@@ -136,14 +137,15 @@ def test_guard_rejects_ungrounded_numbers():
 
 
 def test_grounded_llm_narrative_is_used(run):
-    llm = ScriptedLLM(text="Profitabilitas BBCA menonjol di antara peer.")
+    llm = MockLLMProvider(
+        {"synthesis": MockLLMProvider.text("Profitabilitas BBCA menonjol di antara peer.")})
     state = run("Bandingkan ROE BBCA dan BBRI", llm=llm)
     assert state.briefing.synthesis_mode == "llm"
     assert state.briefing.narrative.startswith("Profitabilitas")
 
 
 def test_ungrounded_llm_narrative_falls_back_to_template(run):
-    llm = ScriptedLLM(text="ROE BBCA 31.2%, sebaiknya dibeli.")
+    llm = MockLLMProvider({"synthesis": MockLLMProvider.text("ROE BBCA 31.2%, sebaiknya dibeli.")})
     state = run("Bandingkan ROE BBCA dan BBRI", llm=llm)
     assert state.briefing.synthesis_mode == "template"
     assert state.briefing.narrative is None
@@ -151,9 +153,9 @@ def test_ungrounded_llm_narrative_falls_back_to_template(run):
 
 
 def test_llm_only_sees_validated_facts(run):
-    llm = ScriptedLLM(text=None)
+    llm = MockLLMProvider()  # records requests; unscripted replies fall back to templates
     run("Bandingkan BBCA dan BMRI dari sisi pertumbuhan", llm=llm)
-    prompt = next(user for kind, user in llm.calls if kind == "text")
+    prompt = next(r for r in llm.requests if r.purpose == "synthesis").messages[-1].content
     # BMRI growth is contradictory and must not reach the LLM as a fact.
     facts_block = prompt.split("Kesenjangan data:")[0]
     assert "Pertumbuhan laba YoY BMRI" not in facts_block

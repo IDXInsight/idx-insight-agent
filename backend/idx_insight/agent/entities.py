@@ -49,6 +49,8 @@ NON_TICKERS = {
     "NPL", "ROA", "ROE", "NIM", "LDR", "CAR", "YOY", "QOQ", "EPS", "OJK", "WIB",
 }
 
+MAX_TICKER_VERIFICATIONS = 3
+
 _TICKER_RE = re.compile(r"\b([A-Za-z]{4})(?:\.JK)?\b")
 
 
@@ -95,7 +97,11 @@ class EntityResolver:
                     entities.unknown.append(upper)
 
         for sym in state.watchlist:
-            add(bare_symbol(sym), sym, "ticker")
+            bare = bare_symbol(sym)
+            if bare in known:
+                add(bare, sym, "ticker")
+            elif bare not in entities.unknown:
+                entities.unknown.append(bare)
 
         # 3) Sector.
         for phrase in sorted(SECTOR_ALIASES, key=len, reverse=True):
@@ -106,20 +112,22 @@ class EntityResolver:
         if state.requested_sub_sector:
             entities.sub_sector = state.requested_sub_sector
 
-        # 4) Verify unknown upper-case tokens against Sectors (bounded: max 3).
-        still_unknown = []
-        for token in dict.fromkeys(entities.unknown).keys():
-            if len(still_unknown) >= 3:
-                still_unknown.append(token)
+        # 4) Verify tickers the agent does not know yet (bounded number of calls).
+        unknown, unverified = [], []
+        for i, token in enumerate(dict.fromkeys(entities.unknown)):
+            if i >= MAX_TICKER_VERIFICATIONS:
+                unverified.append(token)
                 continue
-            result = self.service.company_report(token, ("overview",))
+            # Same sections as FinancialContext so a later report fetch is a cache hit.
+            result = self.service.company_report(token, ("overview", "financials"))
             if result.ok and result.data is not None:
                 add(token, token, "ticker")
-                if result.data.company_name:
-                    entities.companies[-1].company_name = result.data.company_name
+                entities.companies[-1].company_name = result.data.company_name
+            elif result.status == "not_found":
+                unknown.append(token)
             else:
-                still_unknown.append(token)
-        entities.unknown = still_unknown
+                unverified.append(token)
+        entities.unknown, entities.unverified = unknown, unverified
         return entities
 
     def verify_sub_sector(self, slug: str) -> bool:

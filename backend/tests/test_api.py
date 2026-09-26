@@ -1,10 +1,11 @@
 import pytest
-from conftest import AS_OF, ScriptedLLM
+from conftest import AS_OF
 from fastapi.testclient import TestClient
 
 from idx_insight.api.app import app, get_agent_service, get_settings
 from idx_insight.api.service import AgentService
 from idx_insight.config import Settings
+from idx_insight.llm.mock import MockLLMProvider
 from idx_insight.sectors import MockSectorsAdapter
 
 DISCOVERY_Q = "Apa saja disclosure yang perlu saya pantau minggu depan untuk sektor perbankan?"
@@ -76,13 +77,13 @@ def test_query_length_is_validated(client):
 
 
 def test_llm_provider_is_reported():
-    service = AgentService(Settings(), adapter=MockSectorsAdapter(), llm=ScriptedLLM())
+    service = AgentService(Settings(), adapter=MockSectorsAdapter(), llm=MockLLMProvider())
     app.dependency_overrides[get_agent_service] = lambda: service
     try:
         body = post(TestClient(app), "Bandingkan ROE BBCA dan BBRI").json()
     finally:
         app.dependency_overrides.clear()
-    assert body["llm_provider"] == "scripted"
+    assert body["llm_provider"] == "mock"
 
 
 def test_real_mode_is_unavailable_not_faked():

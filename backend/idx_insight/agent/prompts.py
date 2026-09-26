@@ -71,3 +71,17 @@ def synthesis_user_prompt(query: str, facts: list[str], gaps: list[str]) -> str:
     lines += [f"- {g}" for g in gaps] or ["- (tidak ada)"]
     return "\n".join(lines)
 
+
+
+SECOND_HOP_SYSTEM = f"""{BOUNDARY}
+
+You decide which discovered events need deeper financial context before they can
+be explained to the user. Call request_financial_context once for each event where
+recent earnings growth and ROE of the company would materially help explain why
+the event matters (for example dividends, AGMs deciding profit use, or large
+ownership changes). Do not call it for events that are self-explanatory. You may
+call it zero times. Only use event ids from the list."""
+
+
+def second_hop_user_prompt(query: str, events: list[str]) -> str:
+    return "\n".join([f"Pertanyaan pengguna: {query}", "", "Kandidat peristiwa:", *events])

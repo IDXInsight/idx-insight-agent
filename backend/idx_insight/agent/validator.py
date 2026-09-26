@@ -7,13 +7,29 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from idx_insight.agent.state import AgentState, ValidationIssue, ValidationReport
+from idx_insight.agent.state import (
+    AgentState,
+    EvidenceAssessment,
+    ValidationIssue,
+    ValidationReport,
+)
 from idx_insight.analytics.metrics import METRICS
 from idx_insight.analytics.periods import prior_year_period, quarter_label
 from idx_insight.models import Claim
 
 STALE_QUARTER_DAYS = 270  # a quarter older than ~3 reporting cycles
 STALE_YEARS = 1  # annual ratios older than last full year
+
+# Data-gap kinds grouped by what they mean for evidence sufficiency. Kinds not
+# listed (e.g. "unsupported_capability", "not_applicable") are informational.
+GAP_CATEGORIES = {
+    "incomplete": {"incomplete_response", "missing_metric", "scope_truncated",
+                   "insufficient_evidence"},
+    "unavailable": {"tool_error", "budget_exhausted", "unavailable_period", "unknown_company",
+                    "unverified_company", "unknown_sector", "empty_result",
+                    "unsupported_metric"},
+    "malformed": {"malformed_data"},
+}
 
 
 def _is_stale(period: str, as_of: date) -> bool:
@@ -39,15 +55,36 @@ class EvidenceValidator:
             else:
                 report.accepted.append(claim.claim_id)
         if not self.state.claims:
-            report.status = "failed" if self.state.intent and self.state.intent.name != "discovery" else "passed"
+            is_discovery = self.state.intent is not None and self.state.intent.name == "discovery"
+            report.status = "passed" if is_discovery else "failed"
         elif not report.accepted:
             report.status = "failed"
         elif report.rejected:
             report.status = "partial"
         else:
             report.status = "passed"
+        report.assessment = self._assess(report)
         self.state.validation = report
         return report
+
+    def _assess(self, report: ValidationReport) -> EvidenceAssessment:
+        s = self.state
+        assessment = EvidenceAssessment(
+            conflicting=[c.detail for c in s.conflicts],
+            **{cat: [g.detail for g in s.data_gaps if g.kind in kinds]
+               for cat, kinds in GAP_CATEGORIES.items()},
+        )
+        nothing_to_report = (s.intent is not None and s.intent.name == "discovery"
+                             and not s.discovered_events and not assessment.unavailable
+                             and not assessment.malformed)
+        if not report.accepted and not nothing_to_report:
+            assessment.sufficiency = "insufficient"
+        elif (report.rejected or assessment.incomplete or assessment.conflicting
+              or assessment.unavailable or assessment.malformed):
+            assessment.sufficiency = "partial"
+        else:
+            assessment.sufficiency = "sufficient"
+        return assessment
 
     def _check(self, claim: Claim) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []

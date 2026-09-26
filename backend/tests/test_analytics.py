@@ -8,7 +8,6 @@ from idx_insight.analytics.events import (
 )
 from idx_insight.analytics.numbers import (
     fmt_idr,
-    normalize_amount,
     normalize_ratio,
     pct_change,
     robust_outliers,
@@ -18,7 +17,6 @@ from idx_insight.analytics.numbers import (
 from idx_insight.analytics.peers import compare_peers
 from idx_insight.analytics.periods import align_latest_common, prior_year_period, quarter_label
 from idx_insight.models import Event
-
 
 # --- numbers ---------------------------------------------------------------
 
@@ -38,13 +36,6 @@ def test_spread_and_safe_div():
     assert spread(None, 0.1) is None
     assert safe_div(1, 0) is None
     assert safe_div(985, 1290) == pytest.approx(0.7636, rel=1e-3)
-
-
-def test_normalize_amount_units():
-    assert normalize_amount(1.5, "triliun") == 1.5e12
-    assert normalize_amount(250, "billion") == 250e9
-    with pytest.raises(ValueError):
-        normalize_amount(1, "lakh")
 
 
 def test_normalize_ratio_detects_percent_units():

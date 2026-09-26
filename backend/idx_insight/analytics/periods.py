@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping
 
 _QUARTER_BY_MONTH_DAY = {"03-31": 1, "06-30": 2, "09-30": 3, "12-31": 4}
 
