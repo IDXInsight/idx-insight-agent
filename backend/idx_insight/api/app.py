@@ -59,9 +59,11 @@ def capabilities(settings: Settings = Depends(get_settings)) -> dict:
         "data_mode": settings.sectors_data_mode,
         "llm_provider": settings.llm_provider,
         "llm_providers_supported": ["none", "gemini", "groq"],
+        "languages": ["id", "en"],
         "sectors_tools": sorted(DEFAULT_ALLOWLIST),
         "intents": sorted(ALLOWED),
-        "metrics": {name: spec.label for name, spec in METRICS.items()},
+        "metrics": {name: {"id": spec.label_in("id"), "en": spec.label_in("en")}
+                    for name, spec in METRICS.items()},
         "metric_bundles": BUNDLES,
         "unsupported_metrics": sorted(KNOWN_UNSUPPORTED.values()),
         "limits": {
