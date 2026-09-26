@@ -26,6 +26,11 @@ CONFLICT_TOLERANCE = 0.01  # 1 percentage point
 BANKING_SUB_SECTOR = "banks"
 
 
+def sub_sector_slug(name: str) -> str:
+    """Company reports use display names ("Banks"); lists use slugs ("banks")."""
+    return "-".join(name.strip().lower().replace("&", " ").replace(",", " ").split())
+
+
 @dataclass
 class _CompanyData:
     report: CompanyReport | None = None
@@ -137,7 +142,7 @@ class FinancialContext:
         # company, and skipping the check avoids the paid ``overview`` section.
         if spec.banking_only and spec.source != "screener_ratio":
             sub = self.sub_sector(symbol)
-            if sub is not None and sub != BANKING_SUB_SECTOR:
+            if sub is not None and sub_sector_slug(sub) != BANKING_SUB_SECTOR:
                 self.state.add_gap("not_applicable", t(self.lang, "gap.not_applicable",
                                                         label=label, sym=symbol, sub=sub), symbol)
                 data.values[metric] = values

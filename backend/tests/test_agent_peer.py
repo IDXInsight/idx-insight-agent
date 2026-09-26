@@ -136,3 +136,12 @@ def test_npl_missing_for_a_company_is_a_gap(run):
 def test_asset_quality_bundle_maps_to_npl(run):
     state = run("Bandingkan kualitas aset BBCA dan BBRI")
     assert "npl_ratio" in state.analytics["peer_comparison"]
+
+
+def test_banking_check_accepts_display_names_from_real_reports():
+    # Found in the first real-data evaluation: reports say "Banks", lists say "banks".
+    from idx_insight.agent.financials import sub_sector_slug
+
+    assert sub_sector_slug("Banks") == "banks"
+    assert sub_sector_slug(" Oil, Gas & Coal ") == "oil-gas-coal"
+    assert sub_sector_slug("banks") == "banks"
