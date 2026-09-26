@@ -176,6 +176,28 @@ derived from quarterly financials). Requests for undocumented metrics (e.g. NPL)
 are reported as data gaps, not estimated. Responses that do not match the
 documented shape are reported as malformed rather than crashing the agent.
 
+### Data handling
+
+Sectors data is proprietary. The Sectors API security guide names data scraping
+and *unauthorized redistribution* as misuse, and this repository will be public
+for judging. Until the team has confirmed the Sectors Terms of Service
+(https://sectors.app/terms-of-service), follow these rules:
+
+- **Never commit real Sectors responses.** Recordings of real API responses and
+  the local development cache live only in `backend/.sectors_local/`, which is
+  git-ignored. Automated tests use the fictional mock data in
+  `backend/idx_insight/sectors/mock_data.py`, so they spend no credits and contain
+  no Sectors data.
+- **Record once, reuse locally.** When a real response is needed for development,
+  call the endpoint once, save it under `backend/.sectors_local/`, and reuse it
+  instead of calling the API again.
+- **Show data, don't bulk-export it.** The product displays Sectors data in
+  answers to user questions; it must not offer downloads or dumps of raw datasets.
+- **Keys stay server-side.** `SECTORS_API_KEY` lives in `.env` locally and in
+  Vercel environment variables when deployed; never in frontend code, commits or logs.
+- **Credits are limited.** Each team receives 1,000 hackathon credits for this project
+  only. Check the credit budget in PHASE.md before running bulk or live evaluations.
+
 ## Mock vs Real Sectors Integration
 
 Only `MockSectorsAdapter` exists. Its schemas follow the documented Sectors v2

@@ -19,7 +19,22 @@ Future phases are documented for planning and team coordination.
 | 7 | Demo & Submission Preparation | Planned |
 
 Hackathon: SECTORS Hackathon 2026 — Track: AI Agents & Assistants.
-Deadline: 8 October 2026, 23:59 WIB.
+Deadline: 8 October 2026, 23:59 WIB (submission and code freeze).
+The official rules that shape this plan are summarised in
+[Hackathon Rules That Shape the Plan](#hackathon-rules-that-shape-the-plan).
+
+### Proposed Schedule
+
+A proposal for the team to confirm; dates are targets, not commitments.
+
+| Dates (2026) | Phase | Target |
+|---|---|---|
+| until 26 Sep | 0–3 | Foundation, Agent Brain, backend, analytics & validation (done, mock data) |
+| 27–29 Sep | 4 | Real Sectors adapter with credit safeguards; first real-data evaluation |
+| 29 Sep – 3 Oct | 5 | Next.js UI and Vercel deployment |
+| 3–5 Oct | 6 | End-to-end validation on the deployed product; final LLM choice |
+| 5–7 Oct | 7 | Videos, social post, repository cleanup, repository made public |
+| 7 Oct | — | Target submission (one day of buffer before the 8 Oct deadline) |
 
 ---
 
@@ -155,14 +170,21 @@ conclusions when evidence is incomplete.
 Replace the mock data layer with the actual Sectors data source.
 
 ### Deliverables
-- Sectors MCP/REST adapter
-- authentication
+- Sectors REST adapter (v2, `https://api.sectors.app/v2/`, header `Authorization: <key>`)
+- authentication from `SECTORS_API_KEY` (server-side only)
 - real response mapping
 - integration tests
-- error handling
+- error handling, including exponential backoff on HTTP 429
+- credit safeguards, built **before** the first bulk call:
+  - a credit ledger with a hard daily cap
+  - a local development cache so repeated questions cost no credits
+  - one-off recordings of real responses kept locally and never committed
+    (see README → Data handling)
+- a real-data run of the evaluation cases
 
 ### Dependency
-Official Sectors API/MCP access and verified documentation.
+Official Sectors API/MCP access and verified documentation. A working API key
+was confirmed on 2026-09-27 (one call to `get_quarterly_financial_dates`, HTTP 200).
 
 ### Expected Outcome
 The same agent runs unchanged against real Sectors data by switching
@@ -171,6 +193,8 @@ The same agent runs unchanged against real Sectors data by switching
 ### Complete When
 - a real adapter implements the existing `SectorsAdapter` interface
 - open questions recorded in the codebase (e.g. company listing shape, upcoming report dates) are resolved against official documentation
+- automated tests still use mock data and spend no credits
+- the evaluation cases pass on real data within the planned credit budget
 
 ---
 
@@ -193,7 +217,13 @@ Build the user-facing IDX Insight Agent interface.
 - empty states
 
 ### Deployment Target
-Vercel
+Vercel. Live deployment is not required by the rules, but the team chose to
+deploy because a local demo is cumbersome. A public deployment spends Sectors
+credits and LLM quota on every question, so it needs:
+- API keys only in Vercel environment variables, never in frontend code
+- a per-day cap on Sectors calls and LLM calls, with a friendly message when reached
+- response caching for repeated questions
+- basic request rate limiting per client
 
 ### Dependencies
 Phase 2 API contract (Phase 4 for real data).
@@ -229,6 +259,8 @@ User
 - performance checks
 - security checks
 - final integration validation
+- a credit reserve kept for the judging period (9–16 Oct), when judges may use
+  the deployed product
 
 ### Dependencies
 Phases 4 and 5.
@@ -250,8 +282,66 @@ Prepare the project for SECTORS Hackathon 2026 submission.
 - final documentation
 - submission materials
 
+### Submission Checklist (official requirements)
+- [ ] public repository link; the repository stays public for at least 90 days after
+      winners are announced (17 Oct 2026); all API keys removed
+- [ ] one-minute teaser video, published publicly on YouTube or social media
+- [ ] judging video of up to three minutes: problem, intended audience and the core
+      workflow end to end (public or unlisted YouTube/Vimeo, shared Drive, or Loom)
+- [ ] one-sentence problem statement: who the product is for and what problem it solves
+- [ ] track selection (AI Agents & Assistants) and participant names
+- [ ] social media post (Instagram, LinkedIn, Threads or TikTok) tagging the official
+      Sectors account and using the provided thumbnail template
+- [ ] demo and videos run with the LLM enabled and real Sectors data (not mock data)
+
+### Code Freeze
+The repository and the deployed application freeze when the team submits or at
+the deadline, whichever comes first. After that, no commits, pushes or edits of any
+kind are allowed, including bug fixes. The only exception is a leaked credential:
+notify organisers on Slack (#support), revoke and rotate the credential, then push a
+commit that only removes it.
+
 ### Dependencies
 Phase 6.
+
+---
+
+## Hackathon Rules That Shape the Plan
+
+Summary of the official rules (https://hackathon.sectors.app/rules) and the AI Agents &
+Assistants track page, read on 2026-09-27. The official pages remain authoritative.
+
+| Rule | What it means for us |
+|---|---|
+| Submissions and build period close **8 Oct 2026, 23:59 WIB**; registration closes 7 Oct | Target submission on 7 Oct |
+| Every participant completes Sectors onboarding **before** the team writes project code | Each member confirms their onboarding date |
+| Each team gets **1,000 Sectors API credits**, claimed on the team page of the hackathon portal after all members finish onboarding; claiming **locks the roster** | The representative claims the credits; credits are for this project during the build period and expire when the event ends |
+| Registering extra accounts to get more credits for the same project is grounds for **disqualification** | Only use credits obtained legitimately |
+| Sectors must be a **core** data source, not a decorative call; the product must be real, functional and **not faked for the demo** | Phase 4 is mandatory; no mock data in the demo or videos |
+| AI Agents track: custom agent logic or orchestration and an AI/LLM component are **mandatory**; an off-the-shelf client connected to Sectors MCP with prompts alone does not qualify | Demo with the LLM enabled |
+| Working prototype with an end-to-end core workflow; live deployment is **not required** | We deploy anyway (team decision), with the protections listed in Phase 5 |
+| No financial advice; position as an information and analysis tool with a disclaimer where relevant; no automated trade execution | Already enforced by the agent's boundary note and guards |
+| AI coding tools are fully permitted without disclosure | Our no-AI-attribution convention is a team preference, not a rule |
+| Repository created during the build period; judges may inspect commit history | Repository created 2026-09-26; keep meaningful commits |
+| Judging weights: real-world usability **40%**, video demo & storytelling **30%**, technical depth & execution **30%** | Reserve real time for the UI and the videos |
+| Judging is asynchronous (9–16 Oct) from the video and repository only | The README and videos must explain the product on their own |
+
+### Sectors Credit Budget (estimate)
+
+Assumes one credit per call (documented for at least one endpoint; confirm on the
+dashboard after the first calls). Measured with the mock data: discovery on one
+sector ≈ 16–21 calls, a four-bank comparison ≈ 8, one company ≈ 4, one full
+evaluation run ≈ 95.
+
+| Activity | Credits |
+|---|---|
+| Phase 4: response-shape checks (once per endpoint) and edge cases | 15–20 |
+| Phase 4: first real-data evaluation | ~95 |
+| Re-runs after fixes (mostly served from the local cache) | 50–150 |
+| Phases 5–6: UI development and end-to-end validation | 150–250 |
+| Phase 7: demo rehearsals and recording | 200–300 |
+| Reserve for the judging period (deployed product) | ≥ 200 |
+| **Total** | **~700–1,100** |
 
 ---
 
@@ -302,6 +392,8 @@ The project must:
 - avoid financial advice
 - avoid automated trading
 - maintain a clear separation between discovery and analysis
+- keep real Sectors data out of the repository (see README → Data handling)
+- never expose API keys in the repository, frontend code or logs
 
 ---
 
