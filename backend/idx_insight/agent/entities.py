@@ -134,8 +134,8 @@ class EntityResolver:
         result = self.service.list_subsectors()
         return bool(result.ok and result.data and slug in result.data)
 
-    def sector_members(self, slug: str) -> list[ResolvedCompany] | None:
-        result = self.service.list_companies(slug)
+    def sector_members(self, slug: str, limit: int = 12) -> list[ResolvedCompany] | None:
+        result = self.service.list_companies(slug, limit)
         if not result.ok or result.data is None:
             return None
         return [
