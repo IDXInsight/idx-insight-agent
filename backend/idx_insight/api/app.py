@@ -16,13 +16,14 @@ from idx_insight.agent.planner import ALLOWED
 from idx_insight.analytics.metrics import BUNDLES, KNOWN_UNSUPPORTED, METRICS
 from idx_insight.api.schemas import QueryRequest, QueryResponse
 from idx_insight.api.service import AgentService
-from idx_insight.config import Settings
+from idx_insight.config import Settings, load_env_file
 from idx_insight.llm.errors import LLMConfigurationError
 from idx_insight.sectors.service import DEFAULT_ALLOWLIST
 
 
 @lru_cache
 def get_settings() -> Settings:
+    load_env_file()  # local development; real environment variables take precedence
     return Settings.from_env()
 
 
