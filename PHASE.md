@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**Currently until Phase 3**
+**Currently until Phase 4**
 
 This document describes the complete project roadmap.
 Future phases are documented for planning and team coordination.
@@ -13,7 +13,7 @@ Future phases are documented for planning and team coordination.
 | 1 | Agent Brain | Implemented (mock data) |
 | 2 | Backend Foundation | Implemented (mock data) |
 | 3 | Analytics & Validation | Implemented (mock data) |
-| 4 | Real Sectors Integration | Planned |
+| 4 | Real Sectors Integration | In progress |
 | 5 | Product UI | Planned |
 | 6 | End-to-End Validation | Planned |
 | 7 | Demo & Submission Preparation | Planned |
@@ -318,6 +318,8 @@ Assistants track page, read on 2026-09-27. The official pages remain authoritati
 | Each team gets **1,000 Sectors API credits**, claimed on the team page of the hackathon portal after all members finish onboarding; claiming **locks the roster** | The representative claims the credits; credits are for this project during the build period and expire when the event ends |
 | Registering extra accounts to get more credits for the same project is grounds for **disqualification** | Only use credits obtained legitimately |
 | Sectors must be a **core** data source, not a decorative call; the product must be real, functional and **not faked for the demo** | Phase 4 is mandatory; no mock data in the demo or videos |
+| **Data source is restricted to the Sectors API**; AI/LLM APIs may be used in every track (Sectors team on Slack, 16 Sep 2026) | No other market-data sources (no scraping of IDX, Yahoo Finance or news sites). Links in Sectors fields such as a filing's `source` may be shown, but the linked documents are not fetched or parsed. Groq and Gemini are allowed |
+| Fictional mock data is used only for automated tests and local development | Mock data mirrors the *shape* of Sectors responses with fictional values; it is never copied from real responses and never used in the demo, videos or deployment |
 | AI Agents track: custom agent logic or orchestration and an AI/LLM component are **mandatory**; an off-the-shelf client connected to Sectors MCP with prompts alone does not qualify | Demo with the LLM enabled |
 | Working prototype with an end-to-end core workflow; live deployment is **not required** | We deploy anyway (team decision), with the protections listed in Phase 5 |
 | No financial advice; position as an information and analysis tool with a disclaimer where relevant; no automated trade execution | Already enforced by the agent's boundary note and guards |
@@ -399,6 +401,6 @@ The project must:
 
 ## Current Boundary
 
-**Currently until Phase 3.**
+**Currently until Phase 4.**
 
-Phases 4–7 are planned future development.
+Phases 5–7 are planned future development.
