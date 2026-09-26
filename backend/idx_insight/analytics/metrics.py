@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-Source = Literal["report_ratio", "quarterly_growth", "quarterly_ratio"]
+Source = Literal["report_ratio", "quarterly_growth", "quarterly_ratio", "screener_ratio"]
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,7 @@ class MetricSpec:
     # report_ratio: "<category>.<field>" in historical_financial_ratio
     # quarterly_growth: quarterly field whose YoY change is computed
     # quarterly_ratio: (numerator field, denominator field)
+    # screener_ratio: (numerator, denominator) yearly screener fields, e.g. gross_loan[2025]
     path: str | tuple[str, str]
     banking_only: bool = False
     label_en: str | None = None  # English label when it differs from ``label``
@@ -57,6 +58,9 @@ METRICS: dict[str, MetricSpec] = {
                    ("financials_sector_metrics.gross_loan",
                     "financials_sector_metrics.total_deposit"), banking_only=True,
                    label_en="Quarterly LDR (loans/deposits)"),
+        MetricSpec("npl_ratio", "NPL (kredit bermasalah/kredit)", "screener_ratio",
+                   ("non_performing_loan", "gross_loan"), banking_only=True,
+                   label_en="NPL ratio (non-performing/gross loans)"),
     ]
 }
 
@@ -66,13 +70,11 @@ BUNDLES: dict[str, list[str]] = {
     "liquidity": ["loan_to_deposit_ratio", "casa_ratio", "ldr_quarterly"],
     "capital": ["capital_adequacy_ratio"],
     "growth": ["earnings_growth_yoy", "nii_growth_yoy", "loan_growth_yoy"],
+    "asset_quality": ["npl_ratio"],
 }
 
-# Metrics users ask for that the agent does not compute yet (NPL exists in the
-# Sectors screener as non_performing_loan[YYYY] but is not wired in). Reported,
-# never guessed.
+# Metrics users ask for that the agent does not compute. Reported, never guessed.
 KNOWN_UNSUPPORTED: dict[str, str] = {
-    "npl": "Non-performing loan (NPL)",
     "bopo": "BOPO",
     "nsfr": "NSFR",
 }

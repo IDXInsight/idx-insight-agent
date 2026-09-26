@@ -35,11 +35,13 @@ def _value_claim(state: AgentState, mv: MetricValue, section: str, **meta) -> No
 
 def _series(ctx: FinancialContext, symbol: str, metric: str,
             period: str | None) -> dict[str, MetricValue]:
-    if period and len(period) > 4 and METRICS[metric].source != "report_ratio":
+    if period and len(period) > 4 and METRICS[metric].source in ("quarterly_growth",
+                                                                 "quarterly_ratio"):
         ctx.ensure_period(symbol, period)
     values = {mv.period: mv for mv in ctx.metric_values(symbol, metric)}
     if period:
-        wanted = period if len(period) == 4 or METRICS[metric].source != "report_ratio" else period[:4]
+        yearly = METRICS[metric].source in ("report_ratio", "screener_ratio")
+        wanted = period[:4] if yearly else period
         values = {p: mv for p, mv in values.items() if p == wanted}
     return values
 
@@ -51,6 +53,8 @@ def peer_comparison(state: AgentState, ctx: FinancialContext, symbols: list[str]
     peer_results = state.analytics.setdefault("peer_comparison", {})
     for metric in metrics:
         label = METRICS[metric].label_in(lang)
+        if METRICS[metric].source == "screener_ratio":
+            ctx.prefetch_screener(symbols, metric)
         series = {sym: _series(ctx, sym, metric, requested) for sym in symbols}
         if requested:
             for sym, vals in series.items():
@@ -59,7 +63,7 @@ def peer_comparison(state: AgentState, ctx: FinancialContext, symbols: list[str]
                                                           sym=sym, period=quarter_label(requested)),
                                   sym)
         alignment = align_latest_common({s: list(v) for s, v in series.items()})
-        if METRICS[metric].source != "report_ratio" and not requested and (
+        if METRICS[metric].source in ("quarterly_growth", "quarterly_ratio") and not requested and (
             not alignment.aligned or alignment.ahead
         ):
             # Latest quarters differ: fetch exactly the common quarter for the others.

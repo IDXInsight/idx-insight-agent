@@ -112,9 +112,9 @@ def test_single_company_with_advice_request():
 
 
 def test_unsupported_metric_is_flagged():
-    q = "Bandingkan NPL BBCA dan BBRI"
+    q = "Bandingkan BOPO BBCA dan BBRI"
     entities, _ = resolve(q)
-    assert rule_intent(q, entities).unsupported_metrics == ["Non-performing loan (NPL)"]
+    assert rule_intent(q, entities).unsupported_metrics == ["BOPO"]
 
 
 def test_list_only_request_skips_second_hop():

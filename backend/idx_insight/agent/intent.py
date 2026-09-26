@@ -29,12 +29,15 @@ _BUNDLE_WORDS: dict[str, str] = {
     "likuiditas": "liquidity", "liquidity": "liquidity", "pendanaan": "liquidity",
     "funding": "liquidity", "permodalan": "capital", "capital": "capital", "modal": "capital",
     "pertumbuhan": "growth", "growth": "growth",
+    "kualitas aset": "asset_quality", "asset quality": "asset_quality",
+    "kredit bermasalah": "asset_quality", "non-performing": "asset_quality",
 }
 
 _METRIC_WORDS: dict[str, str] = {
     "roa": "roa", "roe": "roe", "nim": "net_interest_margin", "casa": "casa_ratio",
     "ldr": "loan_to_deposit_ratio", "car": "capital_adequacy_ratio",
     "cost-to-income": "cost_to_income_ratio", "cir": "cost_to_income_ratio",
+    "npl": "npl_ratio",
 }
 
 

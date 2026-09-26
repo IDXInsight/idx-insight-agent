@@ -83,6 +83,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "what.filings": {"id": "filing {target}", "en": "filings {target}"},
     "what.company_report": {"id": "company report {sym}", "en": "company report {sym}"},
     "what.quarterly": {"id": "laporan kuartalan {sym}", "en": "quarterly financials {sym}"},
+    "what.screener": {"id": "screener perusahaan", "en": "company screener"},
 
     # --- tool-failure recovery -----------------------------------------------------------
     "recovery.action.not_found": {
@@ -295,7 +296,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "trace.no_second_hop": {"id": "tidak ada peristiwa yang membutuhkan riset lanjutan",
                             "en": "no event needs follow-up research"},
     "trace.evidence_count": {"id": "{n} bukti tercatat", "en": "{n} evidence items recorded"},
-    "trace.reports": {"id": "company report {n} emiten", "en": "company reports for {n} companies"},
+    "trace.scope": {"id": "{n} emiten dalam cakupan analisis", "en": "{n} companies in analysis scope"},
     "trace.validated": {"id": "{accepted} klaim diterima, {rejected} ditolak; kecukupan bukti: {suff}",
                         "en": "{accepted} claims accepted, {rejected} rejected; evidence: {suff}"},
     "trace.llm_fallback": {"id": "{purpose}: {kind}; aturan deterministik dipakai",

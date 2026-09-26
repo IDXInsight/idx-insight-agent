@@ -196,9 +196,8 @@ class _Run:
         s = self.state
         symbols = self._analysis_symbols()
         s.analytics["analysis_symbols"] = symbols
-        for sym in symbols:
-            self.financials.report(sym)
-        s.add_trace("Sectors data retrieved", t(self.lang, "trace.reports", n=len(symbols)))
+        # Data is fetched lazily per metric, so only what the question needs is paid for.
+        s.add_trace("Analysis scope resolved", t(self.lang, "trace.scope", n=len(symbols)))
 
     def step_compare_peers(self) -> None:
         s = self.state
