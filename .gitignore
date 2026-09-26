@@ -9,6 +9,10 @@ CLAUDE.md
 *.key
 secrets/
 
+# --- Real Sectors data (recordings and local cache; never committed) ---
+backend/.sectors_local/
+.sectors_local/
+
 # --- Python ---
 __pycache__/
 *.py[cod]
