@@ -65,6 +65,7 @@ Build the core agentic reasoning and orchestration layer.
 - Second-hop decision logic
 - Agent state
 - LLM prompts
+- Provider-agnostic runtime LLM interface (initial candidates: Gemini, Groq)
 - Evidence reasoning
 - agent tests
 
@@ -80,7 +81,8 @@ action, and decide when additional research is necessary.
 - intent, entities, sector and timeframe are resolved into explicit, serializable state
 - the planner selects a different plan for discovery vs. peer analysis vs. single-company context
 - discovery → relevance → second-hop decisions are made and recorded with reasons
-- LLM usage sits behind an interface with a deterministic offline runtime for tests
+- LLM usage sits behind a provider-agnostic interface; the agent also runs with no
+  LLM at all, and tests use a deterministic mock provider
 - agent decisions (not just HTTP endpoints) are covered by tests
 
 ---
@@ -220,6 +222,7 @@ User
 
 ### Deliverables
 - real-data E2E tests
+- live evaluation and selection of the runtime LLM provider and model
 - failure-case testing
 - performance checks
 - security checks
