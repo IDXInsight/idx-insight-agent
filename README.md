@@ -8,18 +8,19 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 
 ## Current Status
 
-**Phases 0–3 implemented against deterministic mock data.** See
-[PHASE.md](PHASE.md) — the project is currently until Phase 3.
+**Phases 0–4 implemented: the agent runs on real Sectors data** (mock data remains
+for tests and offline development). See [PHASE.md](PHASE.md) — the project is
+currently until Phase 4.
 
 | Area | State |
 |---|---|
 | Agent Brain (resolution, planning, discovery, relevance, second-hop) | Implemented |
 | Deterministic analytics, evidence validation and sufficiency assessment | Implemented |
 | FastAPI backend | Implemented |
-| Sectors data | **Mock only** — real MCP/REST adapter is Phase 4 |
+| Sectors data | Real v2 REST adapter with credit guardrails (verified live on 2026-09-27); fictional mock data for tests |
 | Runtime LLM | Provider-agnostic interface with Gemini and Groq providers; default is rules-only (no LLM). Groq (`openai/gpt-oss-120b`) verified live on all LLM paths (evaluation 16/16 on 2026-09-27); Gemini verified live for synthesis only (other calls hit 503/429 during testing) |
 | Languages | Indonesian and English, following the user's language |
-| Evaluation | 16 cases, runnable offline and against a live LLM |
+| Evaluation | 17 mock cases (offline) and 8 structural real-data cases; real-data run 8/8 with Groq on 2026-09-27 |
 | Final LLM provider/model | **Not decided** |
 | Frontend (Next.js) | Not started — Phase 5 |
 | Deployment (Vercel) | Not started — Phase 5/6 |
@@ -157,24 +158,33 @@ backend/
 
 ## Data Source
 
-Sectors (https://docs.sectors.app/). The adapter maps one method to each
-documented MCP tool the agent uses:
+Sectors v2 REST API (https://docs.sectors.app/), the only market-data source
+(confirmed by the Sectors team). The adapter maps one method to each endpoint the
+agent uses; costs follow the official billing rules:
 
-| Adapter method | Sectors MCP tool |
-|---|---|
-| `get_filings` | `fetch-filings` |
-| `get_corporate_actions` | `fetch-corporate-actions` |
-| `get_quarterly_financials` | `fetch-quarterly-financials` |
-| `get_quarterly_financial_dates` | `fetch-quarterly-financial-dates` |
-| `get_company_report` | `fetch-company-report` |
-| `list_subsectors` | `get-subsectors` |
-| `list_companies` | `fetch-companies-by-subsector` |
+| Adapter method | Endpoint | Credits |
+|---|---|---|
+| `get_filings` | `GET /v2/filings/` | 1 per page |
+| `get_corporate_actions_calendar` | `GET /v2/corporate-actions/` (whole market) | 1 per action type |
+| `get_corporate_actions` | `GET /v2/company/corporate-actions/{symbol}/` | 1 |
+| `get_quarterly_financials` | `GET /v2/financials/quarterly/{symbol}/` | 1 per quarter returned |
+| `get_quarterly_financial_dates` | `GET /v2/company/get_quarterly_financial_dates/{symbol}/` | 1 |
+| `get_company_report` | `GET /v2/company/report/{symbol}/` | 1 per section |
+| `list_subsectors` | `GET /v2/subsectors/` | 1 |
+| `list_companies`, `get_company_metrics` | `GET /v2/companies/` (screener) | 1 |
 
-Only metrics traceable to documented fields are computed (company report
-ratios such as ROA, ROE, NIM, cost-to-income, CASA, LDR, CAR, and growth/ratios
-derived from quarterly financials). Requests for undocumented metrics (e.g. NPL)
-are reported as data gaps, not estimated. Responses that do not match the
-documented shape are reported as malformed rather than crashing the agent.
+A 404 costs one credit and an empty result is billed like any success; 400,
+401/403, 429 and 5xx are free. The agent therefore chooses the cheapest route:
+one calendar call for a whole sector instead of one call per company, one
+quarter at a time instead of five, only the report sections a metric needs, and
+one screener call for NPL across all compared banks.
+
+Metrics are computed only from Sectors fields: company-report ratios (ROA, ROE,
+NIM, cost-to-income, CASA, LDR, CAR), growth and ratios from quarterly
+financials, and the NPL ratio from screener fields (`non_performing_loan` ÷
+`gross_loan`). Other requested metrics (e.g. BOPO) are reported as data gaps,
+not estimated. Responses that do not match the documented shape are reported as
+malformed rather than crashing the agent.
 
 ### Data handling
 
@@ -200,10 +210,24 @@ for judging. Until the team has confirmed the Sectors Terms of Service
 
 ## Mock vs Real Sectors Integration
 
-Only `MockSectorsAdapter` exists. Its schemas follow the documented Sectors v2
-response shapes (the BBCA Q1 2026 figures reuse the documentation example);
-other values and all holder names are fictional. Setting
-`SECTORS_DATA_MODE=real` returns HTTP 503 rather than faking data.
+`SECTORS_DATA_MODE=real` uses `RestSectorsAdapter` over the v2 REST API; `mock`
+uses `MockSectorsAdapter`, whose fictional fixtures mirror the verified response
+*shapes* and are used by automated tests and offline development only — never in
+the demo, videos or deployment. Real mode without a key returns HTTP 503 rather
+than faking data.
+
+Every real request passes through credit guardrails (`sectors/credits.py`,
+`sectors/http_client.py`):
+
+- worst-case cost checked against a daily and a total cap **before** sending;
+  actual cost recorded in a ledger file (`backend/.sectors_local/ledger.json`)
+- local cache of raw responses (`backend/.sectors_local/cache/`), which doubles
+  as the recording of real data; `SECTORS_CACHE_MODE=replay` never calls the API
+- bounded exponential backoff on HTTP 429; dates clamped to Sectors' UTC day
+- invalid symbols and screener fields rejected before any request (a 404 costs a credit)
+
+Check a plan without spending anything with `python -m tools.sectors_probe`
+(add `--run` to probe the endpoints once).
 
 The mock deliberately includes: a late quarterly report (BBTN), an incomplete
 report (BRIS Q2 2026), ratios reported in percent instead of fractions (BBNI),
@@ -212,11 +236,13 @@ growth figures (BMRI), a duplicated filing (BMRI), an empty corporate-actions
 result (BTPS), an ambiguous alias ("bank syariah"), and injectable failures per
 tool and symbol (a number of transient failures, `"always"`, or `"malformed"`).
 
-Open questions for Phase 4, marked `UNVERIFIED` in `sectors/schemas.py`:
-the per-entry `year` key in `historical_financial_ratio`, the populated shape of
-`upcoming_dividend`, and the response shape of the company-listing tool. No
-documented tool provides upcoming financial-report dates; the agent states this
-as an informational gap.
+Verified against live responses (2026-09-27): the `year` key of
+`historical_financial_ratio` (a string such as `"2025"`), the screener and
+subsector list shapes, and that the screener matches symbols only with the
+`.JK` suffix. Still unverified: the populated shape of `upcoming_dividend`
+(not used) and sub-sector names with several words in screener filters. No
+documented endpoint provides upcoming financial-report dates; the agent states
+this as an informational gap.
 
 ## Runtime LLM
 
@@ -260,8 +286,10 @@ variables already set in the real environment always take precedence.
 
 | Variable | Purpose |
 |---|---|
-| `SECTORS_DATA_MODE` | `mock` (only implemented mode) |
-| `SECTORS_API_KEY` | reserved for Phase 4 |
+| `SECTORS_DATA_MODE` | `mock` (fixtures, no credits) or `real` (Sectors API) |
+| `SECTORS_API_KEY` | Sectors v2 API key, sent as `Authorization: <key>` (server-side only) |
+| `SECTORS_CACHE_MODE` | `readwrite` (default), `replay` (0 credits) or `off` |
+| `SECTORS_MAX_CREDITS_PER_DAY` / `SECTORS_MAX_CREDITS_TOTAL` | hard credit caps (default 60 / 700) |
 | `LLM_PROVIDER` | `none`, `gemini` or `groq` |
 | `LLM_MODEL` | model id; required for `gemini`/`groq`, no built-in default |
 | `GEMINI_API_KEY` / `GROQ_API_KEY` | key for the selected provider |
@@ -286,6 +314,8 @@ variables already set in the real environment always take precedence.
   without inputs) and an evidence sufficiency assessment
 - Bounded recovery (see Agentic Workflow)
 - Grounded synthesis with a non-advice boundary note
+- Real Sectors integration with credit guardrails, local cache/replay and
+  credit-aware routing; NPL ratio from the Sectors screener
 - FastAPI: `GET /health`, `GET /v1/capabilities`, `POST /v1/agent/query`
 
 ## Testing
@@ -308,21 +338,24 @@ needs an API key or network access; tests never read a local `.env`.
 
 ### Evaluation
 
-`backend/evals/cases.json` holds 16 questions (Indonesian and English) with the
-expected decisions: intent, language, status, second-hop coverage, detected
-conflicts and data gaps, plus guardrails that apply to every case (no advice or
-speculative language, evidence behind every accepted claim).
+`backend/evals/cases.json` holds 17 questions (Indonesian and English) with the
+expected decisions on mock data: intent, language, status, second-hop coverage,
+detected conflicts and data gaps. `backend/evals/cases_real.json` holds 8
+structural cases for real data (no fixed values, since real data changes).
+Guardrails apply to every case: no advice or speculative language, evidence
+behind every accepted claim.
 
 ```bash
 cd backend
-../.venv/Scripts/python -m evals.run_eval                    # rules-only, deterministic
-../.venv/Scripts/python -m evals.run_eval --live --pause 25  # LLM from .env, paced for free tiers
+../.venv/Scripts/python -m evals.run_eval                                  # mock, rules-only
+../.venv/Scripts/python -m evals.run_eval --live --pause 25                # mock + LLM from .env
+SECTORS_DATA_MODE=real ../.venv/Scripts/python -m evals.run_eval --cases real --live --pause 25
 ```
 
-The data source follows `SECTORS_DATA_MODE`, so the same cases can be re-run
-once the real Sectors adapter exists (Phase 4). Latest live run (Groq,
-2026-09-27): 16/16 cases passed, 31 LLM calls without errors, 12 of 13 narratives
-accepted (one rejected for an uncited sentence and replaced by the template).
+The harness prints the Sectors credits each run used. Latest runs (2026-09-27,
+Groq): mock cases 16/16 with 12 of 13 narratives accepted; real-data cases 8/8
+for 28 credits. The real-data run found a bug the mock could not (sub-sector
+display names such as "Banks" vs the slug "banks"), since fixed.
 
 Run the API locally:
 
@@ -335,21 +368,24 @@ curl -X POST localhost:8000/v1/agent/query -H "content-type: application/json" \
 
 ## Known Limitations
 
-- All data is mock data; nothing has been validated against the live Sectors API.
+- Credit guardrails keep their ledger and cache on the local disk; a Vercel
+  deployment needs persistent storage for them (planned in Phase 5).
+- Sectors bills 404s and empty results, so repeated questions about unknown
+  tickers or empty windows still cost credits the first time.
 - Only Groq has been exercised on every LLM path against the live API; Gemini's
   structured output and tool calling are covered by tests with recorded payloads
   but not yet verified live. Groq strict structured output only works on models
   Groq lists as supporting it.
 - Free-tier rate limits make back-to-back requests fall back to the rules; the
   final provider, model and tier are not decided.
-- Entity aliases cover a small set of companies; broader name matching needs the
-  real company listing (Phase 4).
+- Entity aliases cover a small set of companies; other companies are recognised
+  by their ticker.
 - Relevance weights and thresholds are initial heuristics and need tuning on real data.
 - Only Indonesian and English are supported; the API has no authentication or
   rate limiting yet.
 
 ## Remaining Work
 
-Phases 4–7 in [PHASE.md](PHASE.md): real Sectors integration, the Next.js UI,
-Vercel deployment and end-to-end validation (including live evaluation and
-selection of the runtime LLM provider), and demo/submission materials.
+Phases 5–7 in [PHASE.md](PHASE.md): the Next.js UI and Vercel deployment (with
+persistent credit guardrails), end-to-end validation (including the final choice
+of the runtime LLM provider), and demo/submission materials.

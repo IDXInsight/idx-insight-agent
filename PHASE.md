@@ -13,7 +13,7 @@ Future phases are documented for planning and team coordination.
 | 1 | Agent Brain | Implemented (mock data) |
 | 2 | Backend Foundation | Implemented (mock data) |
 | 3 | Analytics & Validation | Implemented (mock data) |
-| 4 | Real Sectors Integration | In progress |
+| 4 | Real Sectors Integration | Implemented |
 | 5 | Product UI | Planned |
 | 6 | End-to-End Validation | Planned |
 | 7 | Demo & Submission Preparation | Planned |
@@ -196,6 +196,13 @@ The same agent runs unchanged against real Sectors data by switching
 - automated tests still use mock data and spend no credits
 - the evaluation cases pass on real data within the planned credit budget
 
+### Outcome (2026-09-27)
+- Real REST adapter live: filings, market-wide corporate-actions calendar,
+  quarterly financials, company report, subsectors and screener (incl. NPL)
+- Credit guardrails: caps checked before sending, ledger, local cache/replay, 429 backoff
+- Real-data evaluation: 8/8 structural cases with Groq; one real-data bug found and fixed
+- Credits used so far: 49 of the team's allowance (probes, first runs and the evaluation)
+
 ---
 
 ## Phase 5 — Product UI
@@ -224,6 +231,9 @@ credits and LLM quota on every question, so it needs:
 - a per-day cap on Sectors calls and LLM calls, with a friendly message when reached
 - response caching for repeated questions
 - basic request rate limiting per client
+- persistent storage for the credit ledger and response cache: Vercel functions
+  have an ephemeral file system, so the local `backend/.sectors_local/` files used
+  in development do not survive between requests there
 
 ### Dependencies
 Phase 2 API contract (Phase 4 for real data).
