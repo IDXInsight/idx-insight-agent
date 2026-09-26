@@ -1,0 +1,40 @@
+# --- AI working instructions (local only) ---
+CLAUDE.md
+
+# --- Secrets / environment ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Node / Next.js (future frontend) ---
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
