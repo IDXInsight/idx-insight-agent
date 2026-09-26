@@ -6,6 +6,8 @@ provider error text through ``scrub``.
 
 from __future__ import annotations
 
+import re
+
 
 class LLMError(Exception):
     kind = "error"
@@ -55,9 +57,12 @@ class LLMStructuredOutputError(LLMError):
     kind = "invalid_structured_output"
 
 
+_ACCOUNT_IDS = re.compile(r"\b(org|proj|user)_[A-Za-z0-9]{8,}\b")
+
+
 def scrub(text: str, *secrets: str | None, limit: int = 300) -> str:
-    """Remove secrets from provider-supplied text and cap its length."""
+    """Remove secrets and account identifiers from provider text; cap its length."""
     for secret in secrets:
         if secret:
             text = text.replace(secret, "***")
-    return text[:limit]
+    return _ACCOUNT_IDS.sub(r"\1_***", text)[:limit]
