@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from idx_insight.agent.language import Language
 from idx_insight.models import Claim, Event, Evidence, MetricValue
 from idx_insight.sectors.service import ToolCallRecord
 
@@ -101,6 +102,8 @@ class SecondHopDecision(BaseModel):
     decision: Literal["research", "reuse", "skip"]
     reason: str
     source: Literal["rules", "llm"] = "rules"
+    # Why the context matters (fixed categories, never free LLM text).
+    category: str | None = None
     metrics: list[str] = []
 
 
@@ -178,13 +181,19 @@ class TraceStep(BaseModel):
 
 
 class Finding(BaseModel):
-    text: str
+    text: str  # what happened / the fact
     claim_ids: list[str]
+    why: str | None = None  # why it matters (deterministic, from relevance rules)
 
 
 class BriefingSection(BaseModel):
     heading: str
     findings: list[Finding]
+
+
+class CitedSentence(BaseModel):
+    text: str
+    citations: list[str]  # claim ids ("cl-003") and data-gap ids ("gap-2")
 
 
 class Briefing(BaseModel):
@@ -194,7 +203,8 @@ class Briefing(BaseModel):
     data_gaps: list[str] = []
     assumptions: list[str] = []
     boundary_note: str
-    narrative: str | None = None
+    # LLM narrative: every sentence cites accepted claim ids and/or data-gap ids.
+    narrative: list[CitedSentence] | None = None
     synthesis_mode: Literal["template", "llm"] = "template"
     clarification_question: str | None = None
 
@@ -202,6 +212,7 @@ class Briefing(BaseModel):
 class AgentState(BaseModel):
     query: str
     as_of: date
+    language: Language = "id"
     watchlist: list[str] = []
     requested_sub_sector: str | None = None
 

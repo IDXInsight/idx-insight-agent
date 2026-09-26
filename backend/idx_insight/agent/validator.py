@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from idx_insight.agent.i18n import t
 from idx_insight.agent.state import (
     AgentState,
     EvidenceAssessment,
@@ -88,6 +89,7 @@ class EvidenceValidator:
 
     def _check(self, claim: Claim) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
+        lang = self.state.language
 
         def issue(code: str, detail: str, severity: str = "error") -> None:
             issues.append(ValidationIssue(claim_id=claim.claim_id, code=code,  # type: ignore[arg-type]
@@ -95,52 +97,51 @@ class EvidenceValidator:
 
         evidence = [self.state.evidence.get(e) for e in claim.evidence_ids]
         if not claim.evidence_ids or any(e is None for e in evidence):
-            issue("missing_source", "Klaim tidak memiliki bukti yang dapat ditelusuri")
+            issue("missing_source", t(lang, "issue.missing_source"))
             return issues
 
         if claim.metric is not None and claim.metric not in METRICS:
-            issue("unsupported_metric", f"Metrik {claim.metric} tidak didukung data Sectors")
+            issue("unsupported_metric", t(lang, "issue.unsupported_metric", metric=claim.metric))
 
         for ev in evidence:
             assert ev is not None
             if ev.symbol is not None and ev.symbol not in claim.symbols:
-                issue("wrong_company", f"Bukti {ev.evidence_id} milik {ev.symbol}, bukan "
-                                       f"{', '.join(claim.symbols)}")
+                issue("wrong_company", t(lang, "issue.wrong_company", ev=ev.evidence_id,
+                                         owner=ev.symbol, claimed=", ".join(claim.symbols)))
 
         if claim.kind == "metric":
             for ev in evidence:
                 if ev and ev.period != claim.period:
-                    issue("wrong_period", f"Bukti {ev.evidence_id} periode {ev.period}, "
-                                          f"klaim periode {claim.period}")
+                    issue("wrong_period", t(lang, "issue.wrong_period_metric", ev=ev.evidence_id,
+                                            ev_period=ev.period, period=claim.period))
         elif claim.kind in ("calculation", "trend") and claim.period:
             allowed = {claim.period, prior_year_period(claim.period)}
             for ev in evidence:
                 if ev and ev.period not in allowed:
-                    issue("wrong_period", f"Bukti {ev.evidence_id} periode {ev.period} di luar "
-                                          f"{sorted(allowed)}")
+                    issue("wrong_period", t(lang, "issue.wrong_period_calc", ev=ev.evidence_id,
+                                            ev_period=ev.period, allowed=sorted(allowed)))
         elif claim.kind == "comparison":
             periods = set((claim.meta.get("periods") or {}).values())
             if claim.period is None or periods != {claim.period}:
-                issue("wrong_period", "Perbandingan memakai periode berbeda antar emiten: "
-                      + ", ".join(f"{s} {quarter_label(p)}"
-                                  for s, p in (claim.meta.get("periods") or {}).items()))
+                listed = ", ".join(f"{s} {quarter_label(p)}"
+                                   for s, p in (claim.meta.get("periods") or {}).items())
+                issue("wrong_period", t(lang, "issue.mixed_periods", periods=listed))
             if len(claim.symbols) < 2:
-                issue("insufficient_evidence", "Perbandingan butuh minimal dua emiten")
+                issue("insufficient_evidence", t(lang, "issue.min_two"))
         elif claim.kind == "event":
             tf = self.state.timeframe
             if tf and claim.period:
                 d = date.fromisoformat(claim.period)
                 in_window = tf.start <= d <= tf.end or tf.filings_start <= d <= tf.filings_end
                 if not in_window:
-                    issue("wrong_period", f"Tanggal peristiwa {claim.period} di luar jendela waktu")
+                    issue("wrong_period", t(lang, "issue.event_outside", date=claim.period))
 
         if claim.kind == "calculation":
             for name in claim.required_inputs:
                 ev_id = claim.input_evidence.get(name)
                 ev = self.state.evidence.get(ev_id) if ev_id else None
                 if ev is None or ev.value is None:
-                    issue("calculation_without_inputs",
-                          f"Input '{name}' untuk perhitungan tidak memiliki bukti bernilai")
+                    issue("calculation_without_inputs", t(lang, "issue.missing_input", name=name))
 
         for conflict in self.state.conflicts:
             if conflict.metric == claim.metric and conflict.symbol in claim.symbols and (
@@ -149,6 +150,6 @@ class EvidenceValidator:
                 issue("contradictory_values", conflict.detail)
 
         if claim.kind != "event" and claim.period and _is_stale(claim.period, self.state.as_of):
-            issue("stale_data", f"Data periode {quarter_label(claim.period)} sudah lama",
+            issue("stale_data", t(lang, "issue.stale", period=quarter_label(claim.period)),
                   severity="warning")
         return issues

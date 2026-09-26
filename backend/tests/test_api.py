@@ -106,7 +106,8 @@ def test_response_exposes_evidence_assessment_and_llm_calls(client):
 
 def test_llm_calls_are_reported_without_prompts():
     service = AgentService(Settings(), adapter=MockSectorsAdapter(),
-                           llm=MockLLMProvider({"synthesis": MockLLMProvider.text("Ringkas.")}))
+                           llm=MockLLMProvider({"synthesis": MockLLMProvider.structured(
+                               {"sentences": [{"text": "Ringkas.", "citations": ["cl-001"]}]})}))
     app.dependency_overrides[get_agent_service] = lambda: service
     try:
         body = post(TestClient(app), "Bandingkan ROE BBCA dan BBRI").json()

@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 
+from idx_insight.agent.i18n import t
+from idx_insight.agent.language import Language
 from idx_insight.agent.state import Timeframe
 
 FILINGS_LOOKBACK_DAYS = 14
@@ -43,7 +45,7 @@ def _backward(start: date, end: date, label: str, **kw) -> Timeframe:
                      filings_start=start, filings_end=end, **kw)
 
 
-def resolve_timeframe(query: str, as_of: date, intent: str) -> Timeframe:
+def resolve_timeframe(query: str, as_of: date, intent: str, lang: Language = "id") -> Timeframe:
     text = query.lower()
     period = _financial_period(text)
     kw = {"financial_period": period}
@@ -53,50 +55,51 @@ def resolve_timeframe(query: str, as_of: date, intent: str) -> Timeframe:
         if start > end:
             start, end = end, start
         if start > as_of:
-            return _forward(start, end, f"{start} s/d {end}", as_of, **kw)
-        return _backward(start, end, f"{start} s/d {end}", **kw)
+            return _forward(start, end, t(lang, "tf.range", start=start, end=end), as_of, **kw)
+        return _backward(start, end, t(lang, "tf.range", start=start, end=end), **kw)
 
-    if re.search(r"minggu depan|pekan depan|next week", text):
+    if re.search(r"minggu depan|pekan depan|next week|coming week|upcoming week", text):
         start, end = _week_bounds(as_of + timedelta(days=7))
-        return _forward(start, end, f"minggu depan ({start} s/d {end})", as_of, **kw)
+        return _forward(start, end, t(lang, "tf.next_week", start=start, end=end), as_of, **kw)
     if re.search(r"minggu ini|pekan ini|this week", text):
         start, end = _week_bounds(as_of)
-        return Timeframe(start=start, end=end, label=f"minggu ini ({start} s/d {end})",
+        return Timeframe(start=start, end=end, label=t(lang, "tf.this_week", start=start, end=end),
                          direction="around", filings_start=start, filings_end=as_of, **kw)
     if re.search(r"minggu lalu|pekan lalu|last week", text):
         start, end = _week_bounds(as_of - timedelta(days=7))
-        return _backward(start, end, f"minggu lalu ({start} s/d {end})", **kw)
+        return _backward(start, end, t(lang, "tf.last_week", start=start, end=end), **kw)
     if re.search(r"bulan depan|next month", text):
         first = (as_of.replace(day=1) + timedelta(days=32)).replace(day=1)
         last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        return _forward(first, last, f"bulan depan ({first} s/d {last})", as_of, **kw)
+        return _forward(first, last, t(lang, "tf.next_month", start=first, end=last), as_of, **kw)
     if re.search(r"hari ini|today", text):
-        return Timeframe(start=as_of, end=as_of, label=f"hari ini ({as_of})", direction="around",
+        return Timeframe(start=as_of, end=as_of, label=t(lang, "tf.today", day=as_of), direction="around",
                          filings_start=as_of - timedelta(days=1), filings_end=as_of, **kw)
     if m := _N_DAYS_FWD.search(text):
         days = int(m.group(1) or m.group(4))
         end = as_of + timedelta(days=days)
-        return _forward(as_of + timedelta(days=1), end, f"{days} hari ke depan", as_of, **kw)
+        return _forward(as_of + timedelta(days=1), end, t(lang, "tf.next_days", n=days), as_of,
+                        **kw)
     if m := _N_DAYS_BACK.search(text):
         days = int(m.group(1) or m.group(5))
-        return _backward(as_of - timedelta(days=days), as_of, f"{days} hari terakhir", **kw)
+        return _backward(as_of - timedelta(days=days), as_of, t(lang, "tf.last_days", n=days), **kw)
 
     vague = _VAGUE.search(text)
-    note = (f"Frasa waktu '{vague.group(1)}' tidak spesifik; " if vague else "Tidak ada jendela waktu; ")
+    note = t(lang, "tf.note.vague", phrase=vague.group(1)) if vague else t(lang, "tf.note.none")
     if intent == "discovery":
         start, end = as_of + timedelta(days=1), as_of + timedelta(days=DEFAULT_FORWARD_DAYS)
-        return _forward(start, end, f"{DEFAULT_FORWARD_DAYS} hari ke depan (asumsi)", as_of,
-                        assumed=True, note=note + f"memakai {DEFAULT_FORWARD_DAYS} hari ke depan "
-                        f"dan filing {FILINGS_LOOKBACK_DAYS} hari terakhir.", **kw)
+        return _forward(start, end, t(lang, "tf.default_forward", n=DEFAULT_FORWARD_DAYS), as_of,
+                        assumed=True, note=note + t(lang, "tf.note.forward", n=DEFAULT_FORWARD_DAYS,
+                                                    lookback=FILINGS_LOOKBACK_DAYS), **kw)
     if intent == "peer_comparison":
         # Comparisons use the latest reported periods; no event window is needed.
-        return Timeframe(start=as_of, end=as_of, label="periode laporan terbaru yang tersedia",
+        return Timeframe(start=as_of, end=as_of, label=t(lang, "tf.latest_reports"),
                          direction="around", filings_start=as_of, filings_end=as_of, **kw)
     # Company context: recent past plus the next month of scheduled events.
     start, end = as_of - timedelta(days=30), as_of + timedelta(days=30)
-    return Timeframe(start=start, end=end, label="30 hari terakhir dan 30 hari ke depan (asumsi)",
+    return Timeframe(start=start, end=end, label=t(lang, "tf.default_around"),
                      direction="around", assumed=True, filings_start=start, filings_end=as_of,
-                     note=note + "memakai 30 hari ke belakang dan ke depan.", **kw)
+                     note=note + t(lang, "tf.note.around"), **kw)
 
 
 def _financial_period(text: str) -> str | None:

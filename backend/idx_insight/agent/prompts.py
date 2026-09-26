@@ -52,36 +52,69 @@ evidence the user needs (for example, second-hop financial context for events th
 look material). Always finish with validate_evidence then synthesize."""
 
 
+class NarrativeSentence(BaseModel):
+    text: str = Field(description="One sentence of the briefing.")
+    citations: list[str] = Field(
+        description="Ids of the facts or data gaps this sentence is based on, e.g. cl-003, gap-1.")
+
+
+class NarrativeProposal(BaseModel):
+    sentences: list[NarrativeSentence] = Field(description="The briefing, one sentence per item.")
+
+
+LANGUAGE_NAMES = {"id": "Indonesian (Bahasa Indonesia)", "en": "English"}
+
 SYNTHESIS_SYSTEM = f"""{BOUNDARY}
 
-Write a short briefing in Indonesian from the validated facts you are given.
+Write a short, neutral research briefing from the validated facts and data gaps
+you are given. Each fact and gap has an id in square brackets.
+
 Rules:
-- Use only the facts provided. Do not add numbers, dates or companies that are not in them.
-- Keep every number exactly as written in the facts.
-- Explain why each item may matter (context), not what to do about it.
-- Mention data gaps plainly when they are listed.
-- No recommendations, no price targets, no trading language.
-- At most 180 words, plain prose with short paragraphs, no headings."""
+- Every sentence must cite the ids it is based on. Cite only listed ids.
+- Use only information in the cited items. Do not add companies, dates or numbers.
+- Copy every number exactly as written in the cited items, with the same decimal
+  separator and units.
+- Lead with what deserves attention, then why it matters, then what is still
+  unknown (data gaps).
+- Describe; do not interpret or predict. Avoid words such as "signals",
+  "indicates", "will rise", "menandakan", "mengindikasikan", "akan naik".
+- No recommendations, price targets or trading language.
+- At most 6 sentences."""
 
 
-def synthesis_user_prompt(query: str, facts: list[str], gaps: list[str]) -> str:
-    lines = [f"Pertanyaan pengguna: {query}", "", "Fakta tervalidasi:"]
-    lines += [f"- {f}" for f in facts] or ["- (tidak ada)"]
-    lines += ["", "Kesenjangan data:"]
-    lines += [f"- {g}" for g in gaps] or ["- (tidak ada)"]
+def synthesis_user_prompt(query: str, language: str, facts: list[tuple[str, str]],
+                          gaps: list[tuple[str, str]]) -> str:
+    lines = [f"Write the briefing in {LANGUAGE_NAMES[language]}.", f"User question: {query}",
+             "", "Validated facts:"]
+    lines += [f"[{i}] {text}" for i, text in facts] or ["(none)"]
+    lines += ["", "Data gaps:"]
+    lines += [f"[{i}] {text}" for i, text in gaps] or ["(none)"]
     return "\n".join(lines)
 
 
 
 SECOND_HOP_SYSTEM = f"""{BOUNDARY}
 
-You decide which discovered events need deeper financial context before they can
-be explained to the user. Call request_financial_context once for each event where
-recent earnings growth and ROE of the company would materially help explain why
-the event matters (for example dividends, AGMs deciding profit use, or large
-ownership changes). Do not call it for events that are self-explanatory. You may
-call it zero times. Only use event ids from the list."""
+You decide which discovered events need follow-up financial context (the
+company's latest earnings growth and ROE) so their significance can be
+explained. The most material events are already being researched; they are
+listed for context only.
+
+Call request_financial_context for each additional candidate event where that
+context would materially help explain why the event matters, choosing the
+category that best describes why:
+- dividend_capacity: dividend events, where earnings and ROE frame the payout
+- governance_decision: shareholder meetings that may decide on the use of profit
+- ownership_shift: large ownership changes by institutions, insiders or groups
+- corporate_action_context: other corporate actions such as stock splits
+
+Do not call it for self-explanatory events. Calling it zero times is fine.
+Use only event ids from the candidate list."""
 
 
-def second_hop_user_prompt(query: str, events: list[str]) -> str:
-    return "\n".join([f"Pertanyaan pengguna: {query}", "", "Kandidat peristiwa:", *events])
+def second_hop_user_prompt(query: str, already: list[str], candidates: list[str]) -> str:
+    return "\n".join([
+        f"User question: {query}", "",
+        "Already researched:", *(already or ["(none)"]), "",
+        "Candidate events:", *candidates,
+    ])

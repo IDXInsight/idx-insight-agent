@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from idx_insight.agent.i18n import t
 from idx_insight.agent.recovery import record_tool_failure
 from idx_insight.agent.state import AgentState, RecoveryAction
 from idx_insight.analytics.events import event_id
-from idx_insight.analytics.numbers import fmt_idr
+from idx_insight.analytics.numbers import fmt_idr, fmt_share_pct
 from idx_insight.models import Event
 from idx_insight.sectors.schemas import CorporateActions, Filing, bare_symbol
 from idx_insight.sectors.service import SectorsService
@@ -35,11 +36,8 @@ class DiscoveryAgent:
             symbols.append(symbol)
         symbols = list(dict.fromkeys(symbols))
         if len(symbols) > MAX_SCOPE_COMPANIES:
-            self.state.add_gap(
-                "scope_truncated",
-                f"Cakupan {len(symbols)} emiten dibatasi ke {MAX_SCOPE_COMPANIES} pertama "
-                "untuk menjaga jumlah tool call.",
-            )
+            self.state.add_gap("scope_truncated", t(self.state.language, "gap.scope_truncated",
+                                                    n=len(symbols), cap=MAX_SCOPE_COMPANIES))
             symbols = symbols[:MAX_SCOPE_COMPANIES]
         return symbols
 
@@ -48,6 +46,7 @@ class DiscoveryAgent:
     def collect(self, symbols: list[str], sub_sector: str | None) -> list[Event]:
         tf = self.state.timeframe
         assert tf is not None
+        lang = self.state.language
         events: list[Event] = []
         filings = self._filings(symbols, sub_sector, tf.filings_start, tf.filings_end)
         if not filings and self._can_requery() and tf.direction != "backward":
@@ -56,14 +55,12 @@ class DiscoveryAgent:
             filings = self._filings(symbols, sub_sector, widened, tf.filings_end)
             self.state.recovery.append(RecoveryAction(
                 trigger="empty_result", target="fetch-filings",
-                action=f"Perlebar jendela filing ke {WIDENED_LOOKBACK_DAYS} hari terakhir (sekali)",
-                outcome=f"{len(filings)} filing ditemukan",
+                action=t(lang, "recovery.widen.action", days=WIDENED_LOOKBACK_DAYS),
+                outcome=t(lang, "recovery.widen.outcome", n=len(filings)),
             ))
             if filings:
                 self.state.assumptions.append(
-                    f"Jendela filing diperlebar ke {widened} s/d {tf.filings_end} karena "
-                    "jendela awal kosong."
-                )
+                    t(lang, "assumption.widened", start=widened, end=tf.filings_end))
         in_scope = set(symbols)
         for call_id, filing in filings:
             sym = bare_symbol(filing.symbol)
@@ -74,15 +71,12 @@ class DiscoveryAgent:
         for sym in symbols:
             result = self.service.corporate_actions(sym)
             if not result.ok or result.data is None:
-                record_tool_failure(self.state, f"aksi korporasi {sym}", result.status, sym)
+                record_tool_failure(self.state, t(lang, "what.corporate_actions", sym=sym),
+                                    result.status, sym)
                 continue
             events.extend(self._corporate_events(result.call_id, result.data, tf.start, tf.end))
 
-        self.state.add_gap(
-            "unsupported_capability",
-            "Sectors tidak mendokumentasikan jadwal rilis laporan keuangan mendatang; "
-            "hanya tanggal laporan yang sudah terbit yang tersedia.",
-        )
+        self.state.add_gap("unsupported_capability", t(lang, "gap.no_report_schedule"))
         return events
 
     def _can_requery(self) -> bool:
@@ -98,8 +92,9 @@ class DiscoveryAgent:
                 result = self.service.filings(start=start.isoformat(), end=end.isoformat(),
                                               limit=FILINGS_PAGE_LIMIT, offset=offset, **query)
                 if not result.ok or result.data is None:
-                    record_tool_failure(self.state, f"filing {next(iter(query.values()))}",
-                                        result.status)
+                    target = next(iter(query.values()))
+                    record_tool_failure(self.state, t(self.state.language, "what.filings",
+                                                      target=target), result.status)
                     break
                 out.extend((result.call_id, f) for f in result.data.results)
                 if not result.data.pagination.has_next:
@@ -116,16 +111,23 @@ class DiscoveryAgent:
             call_id=call_id, tool="fetch-filings", symbol=sym, period=day, field="filing",
             value=f.title, unit="text", source_ref=f.source or f"fetch-filings {sym} {f.timestamp}",
         )
-        verb = {"buy": "membeli", "sell": "menjual"}.get(f.transaction_type or "", "bertransaksi")
+        lang = self.state.language
+        verb = t(lang, f"event.verb.{f.transaction_type}" if f.transaction_type in ("buy", "sell")
+                 else "event.verb.other")
         pct = f.share_percentage_transaction
-        detail = f" ({pct:.2f}% saham" if pct is not None else " ("
-        detail += f", nilai {fmt_idr(f.transaction_value)})" if f.transaction_value else ")"
+        parts = []
+        if pct is not None:
+            parts.append(t(lang, "event.filing_pct", pct=fmt_share_pct(pct, lang)))
+        if f.transaction_value:
+            parts.append(t(lang, "event.filing_value", value=fmt_idr(f.transaction_value, lang)))
+        detail = f" ({', '.join(parts)})" if parts else ""
+        holder = f.holder_name or t(lang, "event.holder_default")
         return Event(
             event_id=event_id(sym, "ownership_change", f.timestamp, f.source, f.holder_name,
                               f.amount_transaction, call_id, len(self.state.evidence)),
             symbol=sym, company_name=self.names.get(sym), event_type="ownership_change",
             event_date=day,
-            title=f"{f.holder_name or 'Pemegang saham'} {verb} saham {sym}{detail}",
+            title=t(lang, "event.filing", holder=holder, verb=verb, sym=sym, detail=detail),
             source_ref=f.source or ev.source_ref, evidence_ids=[ev.evidence_id],
             attributes={
                 "holder_name": f.holder_name, "holder_type": f.holder_type,
@@ -143,28 +145,26 @@ class DiscoveryAgent:
         sym = bare_symbol(ca.symbol)
         body = ca.corporate_actions
         as_of = self.state.as_of
+        lang = self.state.language
         items: list[tuple[str, str, str, dict]] = []  # (type, date, title, attrs)
         for agm in body.agm or []:
-            items.append(("agm", agm.agm_date, f"RUPS {sym}", {"agm_time": agm.agm_time,
-                                                              "agm_place": agm.agm_place}))
+            items.append(("agm", agm.agm_date, t(lang, "event.agm", sym=sym),
+                          {"agm_time": agm.agm_time, "agm_place": agm.agm_place}))
         for div in body.dividend or []:
             attrs = {"dividend_amount": div.dividend_amount, "dividend_yield": div.dividend_yield,
                      "ex_date": div.ex_date, "payment_date": div.payment_date}
-            items.append(("dividend_ex", div.ex_date,
-                          f"Ex-dividen {sym} Rp{div.dividend_amount:g}/saham"
-                          if div.dividend_amount is not None else f"Ex-dividen {sym}", attrs))
+            title = (t(lang, "event.dividend_ex", sym=sym, amount=fmt_idr(div.dividend_amount, lang))
+                     if div.dividend_amount is not None else t(lang, "event.dividend_ex_plain", sym=sym))
+            items.append(("dividend_ex", div.ex_date, title, attrs))
             if div.payment_date:
                 items.append(("dividend_payment", div.payment_date,
-                              f"Pembayaran dividen {sym}", attrs))
+                              t(lang, "event.dividend_payment", sym=sym), attrs))
         for split in body.stock_split or []:
-            items.append(("stock_split", split.date, f"Stock split {sym} 1:{split.split_ratio:g}",
+            items.append(("stock_split", split.date,
+                          t(lang, "event.stock_split", sym=sym, ratio=f"{split.split_ratio:g}"),
                           {"split_ratio": split.split_ratio}))
         if body.upcoming_dividend not in (None, [], {}):
-            self.state.add_gap(
-                "unverified_shape",
-                f"Field upcoming_dividend {sym} terisi, tetapi strukturnya belum terverifikasi "
-                "di dokumentasi; tidak digunakan.", sym,
-            )
+            self.state.add_gap("unverified_shape", t(lang, "gap.unverified_shape", sym=sym), sym)
 
         events = []
         for etype, day, title, attrs in items:

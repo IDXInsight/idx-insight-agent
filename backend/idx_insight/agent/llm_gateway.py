@@ -15,6 +15,7 @@ from typing import TypeVar
 
 from pydantic import BaseModel
 
+from idx_insight.agent.i18n import t
 from idx_insight.agent.state import AgentState, LLMCallRecord
 from idx_insight.llm.base import LLMProvider
 from idx_insight.llm.errors import LLMError, LLMStructuredOutputError
@@ -66,16 +67,6 @@ class AgentLLM:
 
         return self._run(request, check)
 
-    def write(self, purpose: str, *, system: str, user: str) -> str | None:
-        request = self._request(purpose, system, user)
-
-        def check(response: LLMResponse) -> str:
-            if response.finish_reason == "length" or not (response.text or "").strip():
-                raise LLMStructuredOutputError("empty or truncated text reply")
-            return response.text.strip()  # type: ignore[union-attr]
-
-        return self._run(request, check)
-
     # -- internals -------------------------------------------------------------------
 
     def _request(self, purpose: str, system: str, user: str, **kwargs) -> LLMRequest:
@@ -106,8 +97,9 @@ class AgentLLM:
             result = check(response)
         except LLMError as exc:
             self._record(request.purpose, start, response, status=exc.kind, detail=str(exc))
-            self.state.add_trace("LLM fallback", f"{request.purpose}: {exc.kind}; aturan deterministik "
-                                 "dipakai", "warning")
+            self.state.add_trace("LLM fallback", t(self.state.language, "trace.llm_fallback",
+                                                   purpose=request.purpose, kind=exc.kind),
+                                 "warning")
             return None
         self._record(request.purpose, start, response, status="ok")
         return result
