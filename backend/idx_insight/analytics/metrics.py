@@ -68,7 +68,9 @@ BUNDLES: dict[str, list[str]] = {
     "growth": ["earnings_growth_yoy", "nii_growth_yoy", "loan_growth_yoy"],
 }
 
-# Metrics people ask for that Sectors does not document. Reported, never guessed.
+# Metrics users ask for that the agent does not compute yet (NPL exists in the
+# Sectors screener as non_performing_loan[YYYY] but is not wired in). Reported,
+# never guessed.
 KNOWN_UNSUPPORTED: dict[str, str] = {
     "npl": "Non-performing loan (NPL)",
     "bopo": "BOPO",

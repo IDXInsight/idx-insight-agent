@@ -19,7 +19,9 @@ from idx_insight.models import MetricValue
 from idx_insight.sectors.schemas import CompanyReport, QuarterlyFinancial
 from idx_insight.sectors.service import SectorsService
 
-N_QUARTERS = 5  # latest quarter + the same quarter one year earlier
+# Sectors bills one credit per quarter returned: load only the latest quarter, then
+# fetch exactly the other quarters an analysis needs (prior year, common period).
+N_QUARTERS = 1
 CONFLICT_TOLERANCE = 0.01  # 1 percentage point
 BANKING_SUB_SECTOR = "banks"
 
@@ -51,6 +53,9 @@ class FinancialContext:
         self._companies: dict[str, _CompanyData] = {}
         self._evidence_index: dict[tuple, str] = {}
         self._requeried: set[tuple[str, str]] = set()
+        # Sub-sectors already known (e.g. from the sector's company list); lets the
+        # agent skip the paid ``overview`` report section.
+        self.known_sub_sectors: dict[str, str] = {}
 
     # -- loading ---------------------------------------------------------------
 
@@ -66,7 +71,10 @@ class FinancialContext:
         if data.report_loaded:
             return data.report
         data.report_loaded = True
-        result = self.service.company_report(symbol, ("overview", "financials"))
+        # One credit per section: ``overview`` only when the sub-sector is unknown.
+        sections = (("financials",) if symbol in self.known_sub_sectors
+                    else ("overview", "financials"))
+        result = self.service.company_report(symbol, sections)
         if result.ok:
             data.report, data.report_call = result.data, result.call_id
         else:
@@ -92,6 +100,8 @@ class FinancialContext:
         return data.quarters
 
     def sub_sector(self, symbol: str) -> str | None:
+        if symbol in self.known_sub_sectors:
+            return self.known_sub_sectors[symbol]
         report = self.report(symbol)
         return report.overview.sub_sector if report and report.overview else None
 
@@ -195,10 +205,10 @@ class FinancialContext:
             return []
         path = str(spec.path)
         self._check_incomplete(symbol, rows, path)
-        # Bounded recovery: the default window may not reach the prior-year quarter.
-        prior = prior_year_period(rows[-1].date)
-        if not any(r.date == prior for r in rows) and self.ensure_period(symbol, prior):
-            rows = self.quarters(symbol) or rows
+        # Year-over-year needs the same quarter one year earlier: fetch exactly that one.
+        for period in [r.date for r in rows]:
+            if self.fetch_quarter(symbol, prior_year_period(period)):
+                rows = self.quarters(symbol) or rows
         by_date = {r.date: r for r in rows}
         out = []
         for row in rows:
@@ -270,21 +280,37 @@ class FinancialContext:
             ))
 
     def ensure_period(self, symbol: str, period: str) -> bool:
-        """Bounded re-query for a specific quarter the default window did not return."""
+        """Bounded re-query for a period the user asked for explicitly."""
+        return self._load_quarter(symbol, period, recovery=True)
+
+    def fetch_quarter(self, symbol: str, period: str) -> bool:
+        """Planned fetch of one specific quarter (prior year, common period).
+
+        Returns True when new rows were added. Not counted as a re-query, but each
+        (symbol, quarter) is requested at most once per run.
+        """
+        return self._load_quarter(symbol, period, recovery=False)
+
+    def _load_quarter(self, symbol: str, period: str, *, recovery: bool) -> bool:
         rows = self.quarters(symbol) or []
         if any(r.date == period for r in rows) or len(period) == 4:
-            return any(r.date == period for r in rows)
-        if (symbol, period) in self._requeried or self.state.requeries_used >= self.max_requeries:
+            return False
+        if (symbol, period) in self._requeried:
+            return False
+        if recovery and self.state.requeries_used >= self.max_requeries:
             return False
         self._requeried.add((symbol, period))
-        self.state.requeries_used += 1
+        if recovery:
+            self.state.requeries_used += 1
         result = self.service.quarterly_financials(symbol, report_date=period)
         found = bool(result.ok and result.data)
-        self.state.recovery.append(RecoveryAction(
-            trigger="missing_data", target=f"{symbol} {period}",
-            action=t(self.lang, "recovery.requery.action"),
-            outcome=t(self.lang, "recovery.requery.found" if found else "recovery.requery.missing"),
-        ))
+        if recovery or not found:
+            self.state.recovery.append(RecoveryAction(
+                trigger="missing_data", target=f"{symbol} {period}",
+                action=t(self.lang, "recovery.requery.action"),
+                outcome=t(self.lang, "recovery.requery.found" if found
+                          else "recovery.requery.missing"),
+            ))
         if found:
             data = self._data(symbol)
             new_rows = [r for r in result.data if r.date not in data.quarter_calls]

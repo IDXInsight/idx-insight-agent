@@ -136,6 +136,8 @@ class _Run:
         if members is None:
             s.add_gap("tool_error", t(self.lang, "gap.sector_members", slug=slug))
             return None
+        # Known sub-sector → later company reports can skip the paid overview section.
+        self.financials.known_sub_sectors.update({m.symbol: slug for m in members})
         return [(m.symbol, m.company_name) for m in members]
 
     def step_discover_events(self) -> None:
