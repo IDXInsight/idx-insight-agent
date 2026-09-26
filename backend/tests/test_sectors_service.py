@@ -60,3 +60,11 @@ def test_tool_outside_allowlist_is_refused():
     result = service.filings(sub_sector="banks")
     assert result.status == "not_allowed"
     assert service.calls[0].attempts == 0
+
+
+def test_malformed_response_is_reported_not_raised():
+    service = SectorsService(MockSectorsAdapter(failures={"get_company_report:BBCA": "malformed"}))
+    result = service.company_report("BBCA")
+    assert result.status == "malformed" and result.data is None
+    assert "does not match schema" in result.error
+    assert service.calls[0].attempts == 1  # not retried
