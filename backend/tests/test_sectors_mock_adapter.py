@@ -84,9 +84,27 @@ def test_injected_transient_failure_then_recovers():
     assert adapter.get_corporate_actions("BBNI").symbol == "BBNI.JK"
 
 
-def test_build_adapter_real_mode_is_not_implemented():
-    with pytest.raises(NotImplementedError):
-        build_adapter(Settings(sectors_data_mode="real"))
+def test_build_adapter_real_mode_requires_a_key(tmp_path):
+    from idx_insight.sectors.http_client import SectorsAuthError
+    from idx_insight.sectors.rest_adapter import RestSectorsAdapter
+
+    with pytest.raises(SectorsAuthError):
+        build_adapter(Settings(sectors_data_mode="real", sectors_local_dir=tmp_path))
+    adapter = build_adapter(Settings(sectors_data_mode="real", sectors_api_key="k",
+                                     sectors_local_dir=tmp_path))
+    assert isinstance(adapter, RestSectorsAdapter)
+
+
+def test_mock_companies_are_ordered_by_market_cap_like_the_screener(adapter):
+    assert [c.symbol for c in adapter.list_companies("banks", limit=3)] == [
+        "BBCA.JK", "BBRI.JK", "BMRI.JK"]
+
+
+def test_mock_corporate_actions_calendar(adapter):
+    calendar = adapter.get_corporate_actions_calendar("2026-09-28", "2026-10-04")
+    assert {(r.symbol, r.agm_date) for r in calendar.agm} >= {("BBNI.JK", "2026-09-30")}
+    assert all("2026-09-28" <= r.ex_date <= "2026-10-04" for r in calendar.dividend)
+    assert calendar.stock_split == []
 
 
 def test_injected_malformed_payload_raises_validation_error():

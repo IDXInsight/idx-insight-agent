@@ -18,6 +18,7 @@ from idx_insight.api.schemas import QueryRequest, QueryResponse
 from idx_insight.api.service import AgentService
 from idx_insight.config import Settings, load_env_file
 from idx_insight.llm.errors import LLMConfigurationError
+from idx_insight.sectors.adapter import SectorsError
 from idx_insight.sectors.service import DEFAULT_ALLOWLIST
 
 
@@ -35,7 +36,7 @@ def _build_service(settings: Settings) -> AgentService:
 def get_agent_service(settings: Settings = Depends(get_settings)) -> AgentService:
     try:
         return _build_service(settings)
-    except (NotImplementedError, LLMConfigurationError) as exc:
+    except (SectorsError, LLMConfigurationError) as exc:
         # Messages name the missing setting only; they never contain secret values.
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

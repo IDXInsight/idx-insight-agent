@@ -23,10 +23,12 @@ from typing import Any, Generic, Literal, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from idx_insight.sectors.adapter import SectorsAdapter, SectorsError, SectorsNotFoundError
+from idx_insight.sectors.credits import SectorsCreditCapError
 from idx_insight.sectors.schemas import (
     CompanyRef,
     CompanyReport,
     CorporateActions,
+    CorporateActionsCalendar,
     FilingsPage,
     QuarterlyFinancial,
     QuarterlyFinancialDates,
@@ -42,6 +44,8 @@ TOOL_NAMES: dict[str, str] = {
     "get_quarterly_financials": "fetch-quarterly-financials",
     "get_quarterly_financial_dates": "fetch-quarterly-financial-dates",
     "get_corporate_actions": "fetch-corporate-actions",
+    # Market-wide calendar; REST only (GET /v2/corporate-actions/), no MCP tool listed.
+    "get_corporate_actions_calendar": "corporate-actions-calendar",
     "get_filings": "fetch-filings",
 }
 
@@ -125,6 +129,11 @@ class SectorsService:
             record.attempts += 1
             try:
                 data = fn()
+            except SectorsCreditCapError as exc:
+                # Refused locally before sending: nothing was spent, do not retry.
+                record.attempts -= 1
+                record.status, record.error = "budget_exhausted", str(exc)
+                return ToolResult(call_id, tool, "budget_exhausted", error=str(exc))
             except SectorsNotFoundError as exc:
                 record.status, record.error = "not_found", str(exc)
                 result: ToolResult[T] = ToolResult(call_id, tool, "not_found", error=str(exc))
@@ -154,11 +163,11 @@ class SectorsService:
     def list_subsectors(self) -> ToolResult[list[str]]:
         return self._invoke("list_subsectors", self.adapter.list_subsectors, {})
 
-    def list_companies(self, sub_sector: str) -> ToolResult[list[CompanyRef]]:
+    def list_companies(self, sub_sector: str, limit: int = 12) -> ToolResult[list[CompanyRef]]:
         return self._invoke(
             "list_companies",
-            lambda: self.adapter.list_companies(sub_sector),
-            {"sub_sector": sub_sector},
+            lambda: self.adapter.list_companies(sub_sector, limit),
+            {"sub_sector": sub_sector, "limit": limit},
         )
 
     def company_report(
@@ -191,6 +200,15 @@ class SectorsService:
             "get_corporate_actions",
             lambda: self.adapter.get_corporate_actions(symbol),
             {"symbol": symbol},
+        )
+
+    def corporate_actions_calendar(
+        self, start: str, end: str, types: tuple[str, ...] = ("agm", "dividend", "stock_split")
+    ) -> ToolResult[CorporateActionsCalendar]:
+        return self._invoke(
+            "get_corporate_actions_calendar",
+            lambda: self.adapter.get_corporate_actions_calendar(start, end, types),
+            {"start": start, "end": end, "types": list(types)},
         )
 
     def filings(

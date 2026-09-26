@@ -23,6 +23,7 @@ from idx_insight.sectors.schemas import (
     CompanyRef,
     CompanyReport,
     CorporateActions,
+    CorporateActionsCalendar,
     FilingsPage,
     QuarterlyFinancial,
     QuarterlyFinancialDates,
@@ -73,13 +74,13 @@ class MockSectorsAdapter(SectorsAdapter):
         self._maybe_fail("list_subsectors")
         return sorted(mock_data.SUBSECTORS)
 
-    def list_companies(self, sub_sector: str) -> list[CompanyRef]:
+    def list_companies(self, sub_sector: str, limit: int = 12) -> list[CompanyRef]:
         self._maybe_fail("list_companies", sub_sector)
-        return [
-            CompanyRef(symbol=f"{sym}.JK", **info)
-            for sym, info in sorted(mock_data.COMPANIES.items())
-            if info["sub_sector"] == sub_sector
-        ]
+        members = [sym for sym, info in mock_data.COMPANIES.items()
+                   if info["sub_sector"] == sub_sector]
+        members.sort(key=lambda sym: -mock_data.market_cap(sym))  # like the screener
+        return [CompanyRef(symbol=f"{sym}.JK", **mock_data.COMPANIES[sym])
+                for sym in members[:limit]]
 
     def get_company_report(
         self, symbol: str, sections: Sequence[str] = ("overview", "financials")
@@ -116,6 +117,22 @@ class MockSectorsAdapter(SectorsAdapter):
         bare = self._known(symbol)
         body = copy.deepcopy(mock_data.CORPORATE_ACTIONS.get(bare, {}))
         return CorporateActions.model_validate({"symbol": f"{bare}.JK", "corporate_actions": body})
+
+    def get_corporate_actions_calendar(
+        self, start: str, end: str, types: Sequence[str] = ("agm", "dividend", "stock_split")
+    ) -> CorporateActionsCalendar:
+        self._maybe_fail("get_corporate_actions_calendar")
+        date_key = {"agm": "agm_date", "dividend": "ex_date", "stock_split": "date"}
+        body: dict = {"start": start, "end": end}
+        for kind in types:
+            rows = [
+                {**copy.deepcopy(row), "symbol": f"{sym}.JK"}
+                for sym, actions in mock_data.CORPORATE_ACTIONS.items()
+                for row in actions.get(kind) or []
+                if start <= row[date_key[kind]] <= end
+            ]
+            body[kind] = sorted(rows, key=lambda r: (r[date_key[kind]], r["symbol"]))
+        return CorporateActionsCalendar.model_validate(body)
 
     def get_filings(
         self,

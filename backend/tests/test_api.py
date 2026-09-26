@@ -86,14 +86,15 @@ def test_llm_provider_is_reported():
     assert body["llm_provider"] == "mock"
 
 
-def test_real_mode_is_unavailable_not_faked():
-    app.dependency_overrides[get_settings] = lambda: Settings(sectors_data_mode="real")
+def test_real_mode_without_key_is_unavailable_not_faked(tmp_path):
+    app.dependency_overrides[get_settings] = lambda: Settings(sectors_data_mode="real",
+                                                              sectors_local_dir=tmp_path)
     try:
         response = post(TestClient(app), DISCOVERY_Q)
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 503
-    assert "Phase 4" in response.json()["detail"]
+    assert "SECTORS_API_KEY" in response.json()["detail"]
 
 
 def test_response_exposes_evidence_assessment_and_llm_calls(client):
