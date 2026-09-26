@@ -23,7 +23,11 @@ from idx_insight.agent.analysis import (
     peer_comparison,
     second_hop_context,
 )
-from idx_insight.agent.discovery import DiscoveryAgent
+from idx_insight.agent.discovery import (
+    MAX_SCOPE_COMPANIES,
+    SECTOR_DISCOVERY_LIMIT,
+    DiscoveryAgent,
+)
 from idx_insight.agent.entities import EntityResolver
 from idx_insight.agent.financials import FinancialContext
 from idx_insight.agent.i18n import t
@@ -124,7 +128,7 @@ class _Run:
 
     # -- plan steps --------------------------------------------------------------
 
-    def _sector_scope(self) -> list[tuple[str, str | None]] | None:
+    def _sector_scope(self, limit: int = MAX_SCOPE_COMPANIES) -> list[tuple[str, str | None]] | None:
         s = self.state
         slug = s.entities.sub_sector
         if slug is None:
@@ -132,7 +136,7 @@ class _Run:
         if not self.entities.verify_sub_sector(slug):
             s.add_gap("unknown_sector", t(self.lang, "gap.unknown_sector", slug=slug))
             return None
-        members = self.entities.sector_members(slug)
+        members = self.entities.sector_members(slug, limit)
         if members is None:
             s.add_gap("tool_error", t(self.lang, "gap.sector_members", slug=slug))
             return None
@@ -143,9 +147,11 @@ class _Run:
     def step_discover_events(self) -> None:
         s = self.state
         explicit = [(c.symbol, c.company_name) for c in s.entities.companies]
-        sector = self._sector_scope() if not explicit else []
+        # Discovery covers the whole sector: company list, calendar and filings each cost
+        # one call regardless of size. Per-company work (second-hop) is capped later.
+        sector = self._sector_scope(SECTOR_DISCOVERY_LIMIT) if not explicit else []
         members = explicit or sector or []
-        symbols = self.discovery.scope(members)
+        symbols = self.discovery.scope(members, cap=None if sector else MAX_SCOPE_COMPANIES)
         if not symbols:
             s.add_trace("Discovery selected", t(self.lang, "trace.empty_scope"), "error")
             return

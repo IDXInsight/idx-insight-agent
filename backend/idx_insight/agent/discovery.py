@@ -13,7 +13,8 @@ from idx_insight.models import Event
 from idx_insight.sectors.schemas import CorporateActions, Filing, bare_symbol
 from idx_insight.sectors.service import SectorsService
 
-MAX_SCOPE_COMPANIES = 12
+MAX_SCOPE_COMPANIES = 12  # per-company analysis (each company costs credits)
+SECTOR_DISCOVERY_LIMIT = 200  # whole sector: one screener call, market-wide calendar/filings
 MAX_FILING_PAGES = 3
 FILINGS_PAGE_LIMIT = 30  # documented maximum for /v2/filings/
 WIDENED_LOOKBACK_DAYS = 30
@@ -30,17 +31,19 @@ class DiscoveryAgent:
 
     # -- scope -----------------------------------------------------------------
 
-    def scope(self, members: list[tuple[str, str | None]]) -> list[str]:
+    def scope(self, members: list[tuple[str, str | None]],
+              cap: int | None = MAX_SCOPE_COMPANIES) -> list[str]:
+        """Unique symbols in scope; ``cap`` bounds per-company work (None = no cap)."""
         symbols = []
         for symbol, name in members:
             if name:
                 self.names[symbol] = name
             symbols.append(symbol)
         symbols = list(dict.fromkeys(symbols))
-        if len(symbols) > MAX_SCOPE_COMPANIES:
+        if cap is not None and len(symbols) > cap:
             self.state.add_gap("scope_truncated", t(self.state.language, "gap.scope_truncated",
-                                                    n=len(symbols), cap=MAX_SCOPE_COMPANIES))
-            symbols = symbols[:MAX_SCOPE_COMPANIES]
+                                                    n=len(symbols), cap=cap))
+            symbols = symbols[:cap]
         return symbols
 
     # -- collection ------------------------------------------------------------
