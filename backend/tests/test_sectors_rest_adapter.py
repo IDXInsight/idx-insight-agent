@@ -128,3 +128,32 @@ def test_credit_cap_surfaces_as_budget_exhausted_in_the_service(tmp_path):
     result = service.corporate_actions_calendar("2026-09-28", "2026-10-04")  # needs 3 credits
     assert result.status == "budget_exhausted"
     assert router.seen == [] and service.calls[0].attempts == 0
+
+
+def test_company_metrics_use_one_screener_call_with_jk_symbols(tmp_path):
+    adapter, router, ledger = adapter_for(tmp_path, {"/v2/companies/": (200, {"results": [
+        {"symbol": "AAAA.JK", "query_values": {"non_performing_loan[2025]": 2.0,
+                                               "gross_loan[2025]": 100.0}},
+        {"symbol": "BBBB.JK", "query_values": {"non_performing_loan[2025]": None,
+                                               "gross_loan[2025]": 50.0}}]})})
+    values = adapter.get_company_metrics(["aaaa", "BBBB.JK"],
+                                         ["non_performing_loan[2025]", "gross_loan[2025]"])
+    assert values == {"AAAA": {"non_performing_loan[2025]": 2.0, "gross_loan[2025]": 100.0}}
+    where = router.seen[0][1]["where"]
+    assert where.startswith("symbol in ['AAAA.JK', 'BBBB.JK'] and non_performing_loan[2025] >")
+    assert router.seen[0][1]["include_query_values"] == "true" and ledger.total == 1
+
+
+def test_company_metrics_reject_unsafe_field_names(tmp_path):
+    adapter, router, _ = adapter_for(tmp_path, {})
+    with pytest.raises(Exception, match="invalid screener field"):
+        adapter.get_company_metrics(["AAAA"], ["roe[2025]) or (1=1"])
+    assert router.seen == []
+
+
+def test_mock_company_metrics_omit_companies_without_values():
+    from idx_insight.sectors import MockSectorsAdapter
+
+    values = MockSectorsAdapter().get_company_metrics(
+        ["BBCA", "BTPS", "TLKM"], ["non_performing_loan[2025]", "gross_loan[2025]"])
+    assert set(values) == {"BBCA"}
