@@ -94,3 +94,51 @@ def test_real_mode_is_unavailable_not_faked():
         app.dependency_overrides.clear()
     assert response.status_code == 503
     assert "Phase 4" in response.json()["detail"]
+
+
+def test_response_exposes_evidence_assessment_and_llm_calls(client):
+    body = post(client, "Bandingkan pertumbuhan BBCA dan BMRI").json()
+    assert body["validation"]["assessment"]["sufficiency"] == "partial"
+    assert body["validation"]["assessment"]["conflicting"]
+    assert body["llm_calls"] == []  # rules-only mode by default
+    assert body["llm_provider"] == "none"
+
+
+def test_llm_calls_are_reported_without_prompts():
+    service = AgentService(Settings(), adapter=MockSectorsAdapter(),
+                           llm=MockLLMProvider({"synthesis": MockLLMProvider.text("Ringkas.")}))
+    app.dependency_overrides[get_agent_service] = lambda: service
+    try:
+        body = post(TestClient(app), "Bandingkan ROE BBCA dan BBRI").json()
+    finally:
+        app.dependency_overrides.clear()
+    calls = {c["purpose"]: c for c in body["llm_calls"]}
+    assert calls["synthesis"]["status"] == "ok" and calls["synthesis"]["provider"] == "mock"
+    assert set(calls["synthesis"]) == {"purpose", "provider", "model", "status", "latency_ms",
+                                       "input_tokens", "output_tokens", "detail"}
+
+
+@pytest.mark.parametrize("settings, missing", [
+    (Settings(llm_provider="groq", llm_model="openai/gpt-oss-120b"), "GROQ_API_KEY"),
+    (Settings(llm_provider="gemini", gemini_api_key="AIza-not-a-real-key"), "LLM_MODEL"),
+])
+def test_misconfigured_llm_returns_503_without_secrets(settings, missing):
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        response = post(TestClient(app), DISCOVERY_Q)
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 503
+    assert missing in response.json()["detail"]
+    assert "AIza-not-a-real-key" not in response.text
+
+
+def test_health_reports_provider_and_model_but_no_keys(client):
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        llm_provider="groq", llm_model="openai/gpt-oss-120b", groq_api_key="gsk-hidden")
+    try:
+        body = TestClient(app).get("/health").json()
+    finally:
+        app.dependency_overrides.clear()
+    assert body["llm_provider"] == "groq" and body["llm_model"] == "openai/gpt-oss-120b"
+    assert "gsk-hidden" not in str(body)
