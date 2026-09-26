@@ -78,6 +78,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Field upcoming_dividend for {sym} is populated but its structure is not verified "
               "in the documentation; not used."},
     "what.corporate_actions": {"id": "aksi korporasi {sym}", "en": "corporate actions {sym}"},
+    "what.corporate_actions_calendar": {"id": "kalender aksi korporasi",
+                                        "en": "corporate actions calendar"},
     "what.filings": {"id": "filing {target}", "en": "filings {target}"},
     "what.company_report": {"id": "company report {sym}", "en": "company report {sym}"},
     "what.quarterly": {"id": "laporan kuartalan {sym}", "en": "quarterly financials {sym}"},
@@ -173,8 +175,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     # --- validator ---------------------------------------------------------------------------
     "issue.missing_source": {"id": "Klaim tidak memiliki bukti yang dapat ditelusuri",
                              "en": "The claim has no traceable evidence"},
-    "issue.unsupported_metric": {"id": "Metrik {metric} tidak didukung data Sectors",
-                                 "en": "Metric {metric} is not supported by Sectors data"},
+    "issue.unsupported_metric": {"id": "Metrik {metric} belum didukung agen ini",
+                                 "en": "Metric {metric} is not supported by this agent"},
     "issue.wrong_company": {"id": "Bukti {ev} milik {owner}, bukan {claimed}",
                             "en": "Evidence {ev} belongs to {owner}, not {claimed}"},
     "issue.wrong_period_metric": {"id": "Bukti {ev} periode {ev_period}, klaim periode {period}",
@@ -250,12 +252,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "gap.unverified_company": {"id": "Kode {sym} tidak dapat diverifikasi.",
                                "en": "Code {sym} could not be verified."},
     "recovery.unsupported.action": {
-        "id": "Tidak diestimasi; hanya metrik yang terdokumentasi di Sectors dipakai",
-        "en": "Not estimated; only metrics documented by Sectors are used"},
+        "id": "Tidak diestimasi; hanya metrik yang didukung agen yang dipakai",
+        "en": "Not estimated; only metrics supported by the agent are used"},
     "recovery.unsupported.outcome": {"id": "Dilaporkan sebagai kesenjangan data",
                                      "en": "Reported as a data gap"},
-    "gap.unsupported_metric": {"id": "{label} tidak tersedia sebagai field terdokumentasi di Sectors.",
-                               "en": "{label} is not available as a documented Sectors field."},
+    "gap.unsupported_metric": {"id": "{label} belum didukung oleh agen ini.",
+                               "en": "{label} is not supported by this agent yet."},
     "assumption.substitute_bundle": {
         "id": "Metrik yang diminta tidak tersedia; ditampilkan bundle profitabilitas sebagai konteks "
               "pengganti.",

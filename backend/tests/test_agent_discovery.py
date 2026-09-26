@@ -58,11 +58,12 @@ def test_list_only_request_skips_second_hop(run):
 
 
 def test_second_hop_respects_tool_budget(run):
-    state = run(DISCOVERY_Q, settings=Settings(max_tool_calls=11))
+    # 4 discovery calls (subsectors, companies, filings, calendar) + 3 per researched company.
+    state = run(DISCOVERY_Q, settings=Settings(max_tool_calls=9))
     skips = [d for d in state.second_hop if "anggaran" in d.reason]
     assert skips
     assert any(r.trigger == "budget_exhausted" for r in state.recovery)
-    assert sum(c.attempts for c in state.tool_calls) <= 11
+    assert sum(c.attempts for c in state.tool_calls) <= 9
 
 
 def test_reporting_dates_gap_is_explicit(run):
@@ -80,21 +81,49 @@ def test_empty_filings_trigger_one_bounded_widening(run):
 
 
 def test_corporate_action_outage_becomes_gap_not_crash(run):
-    adapter = MockSectorsAdapter(failures={"get_corporate_actions:BBNI": "always"})
+    adapter = MockSectorsAdapter(failures={"get_corporate_actions_calendar:*": "always"})
     state = run(DISCOVERY_Q, adapter=adapter)
-    assert any(r.trigger == "tool_error" and "BBNI" in r.target for r in state.recovery)
-    assert any(g.kind == "tool_error" and g.symbol == "BBNI" for g in state.data_gaps)
-    assert not any(e.symbol == "BBNI" and e.event_type == "agm" for e in state.discovered_events)
+    assert any(r.trigger == "tool_error" and "kalender" in r.target for r in state.recovery)
+    assert any(g.kind == "tool_error" for g in state.data_gaps)
+    assert not any(e.event_type == "agm" for e in state.discovered_events)
+    # Filings are still discovered.
+    assert any(e.event_type == "ownership_change" for e in state.discovered_events)
     assert state.status == "partial"
 
 
 def test_transient_error_is_retried_and_recovers(run):
-    adapter = MockSectorsAdapter(failures={"get_corporate_actions:BBNI": 1})
+    adapter = MockSectorsAdapter(failures={"get_corporate_actions_calendar:*": 1})
     state = run(DISCOVERY_Q, adapter=adapter)
     assert any(e.symbol == "BBNI" and e.event_type == "agm" for e in state.discovered_events)
-    call = next(c for c in state.tool_calls if c.tool == "fetch-corporate-actions"
-                and c.args["symbol"] == "BBNI")
+    call = next(c for c in state.tool_calls if c.tool == "corporate-actions-calendar")
     assert call.attempts == 2
+
+
+def test_sector_scope_uses_one_calendar_call(run):
+    state = run(DISCOVERY_Q)
+    assert state.analytics["corporate_actions_source"] == "calendar"
+    tools = [c.tool for c in state.tool_calls]
+    assert tools.count("corporate-actions-calendar") == 1
+    assert "fetch-corporate-actions" not in tools
+
+
+def test_small_watchlist_uses_per_company_lookups(run):
+    state = run("Disclosure BBRI dan BBNI minggu depan")
+    assert state.analytics["corporate_actions_source"] == "per_company"
+    assert [c.tool for c in state.tool_calls].count("fetch-corporate-actions") == 2
+
+
+def test_quarterly_data_is_fetched_one_quarter_at_a_time(run):
+    state = run(DISCOVERY_Q)
+    quarterly = [c for c in state.tool_calls if c.tool == "fetch-quarterly-financials"]
+    assert all(c.args.get("n_quarters") in (None, 1) for c in quarterly)
+    assert {c.args.get("report_date") for c in quarterly} - {None} == {"2025-06-30"}
+
+
+def test_sector_members_skip_the_paid_overview_section(run):
+    state = run(DISCOVERY_Q)
+    reports = [c for c in state.tool_calls if c.tool == "fetch-company-report"]
+    assert reports and all(c.args["sections"] == ["financials"] for c in reports)
 
 
 def test_filings_outage_is_reported(run):

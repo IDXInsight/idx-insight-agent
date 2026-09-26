@@ -55,9 +55,9 @@ def test_unknown_watchlist_ticker_is_a_gap_not_a_tool_error(run):
 
 
 def test_malformed_sectors_payload_becomes_a_malformed_gap(run):
-    adapter = MockSectorsAdapter(failures={"get_corporate_actions:BBNI": "malformed"})
+    adapter = MockSectorsAdapter(failures={"get_corporate_actions_calendar:*": "malformed"})
     state = run(DISCOVERY_Q, adapter=adapter)
-    assert any(g.kind == "malformed_data" and g.symbol == "BBNI" for g in state.data_gaps)
+    assert any(g.kind == "malformed_data" for g in state.data_gaps)
     assert state.validation.assessment.malformed
     assert state.status == "partial"
 

@@ -17,6 +17,8 @@ MAX_SCOPE_COMPANIES = 12
 MAX_FILING_PAGES = 3
 FILINGS_PAGE_LIMIT = 30  # documented maximum for /v2/filings/
 WIDENED_LOOKBACK_DAYS = 30
+CALENDAR_TYPES = ("agm", "dividend", "stock_split")
+CALENDAR_MAX_DAYS = 90  # documented limit of the market-wide calendar
 
 
 class DiscoveryAgent:
@@ -68,13 +70,7 @@ class DiscoveryAgent:
                 continue
             events.append(self._filing_event(call_id, filing))
 
-        for sym in symbols:
-            result = self.service.corporate_actions(sym)
-            if not result.ok or result.data is None:
-                record_tool_failure(self.state, t(lang, "what.corporate_actions", sym=sym),
-                                    result.status, sym)
-                continue
-            events.extend(self._corporate_events(result.call_id, result.data, tf.start, tf.end))
+        events.extend(self._scheduled_events(symbols, tf.start, tf.end))
 
         self.state.add_gap("unsupported_capability", t(lang, "gap.no_report_schedule"))
         return events
@@ -140,8 +136,51 @@ class DiscoveryAgent:
             },
         )
 
+    def _scheduled_events(self, symbols: list[str], start: date, end: date) -> list[Event]:
+        """Corporate actions in the window, choosing the cheaper Sectors call.
+
+        Per-company lookups cost one credit each; the market-wide calendar costs one
+        credit per action type. The calendar wins once the scope has more companies
+        than action types, and its window is limited to 90 days.
+        """
+        lang = self.state.language
+        use_calendar = (len(symbols) > len(CALENDAR_TYPES)
+                        and (end - start).days <= CALENDAR_MAX_DAYS)
+        self.state.analytics["corporate_actions_source"] = "calendar" if use_calendar else "per_company"
+        if not use_calendar:
+            events: list[Event] = []
+            for sym in symbols:
+                result = self.service.corporate_actions(sym)
+                if not result.ok or result.data is None:
+                    record_tool_failure(self.state, t(lang, "what.corporate_actions", sym=sym),
+                                        result.status, sym)
+                    continue
+                events.extend(self._corporate_events(result.call_id, result.data, start, end))
+            return events
+
+        result = self.service.corporate_actions_calendar(start.isoformat(), end.isoformat(),
+                                                         CALENDAR_TYPES)
+        if not result.ok or result.data is None:
+            record_tool_failure(self.state, t(lang, "what.corporate_actions_calendar"),
+                                result.status)
+            return []
+        in_scope = set(symbols)
+        per_symbol: dict[str, dict[str, list]] = {}
+        for kind in CALENDAR_TYPES:
+            for row in getattr(result.data, kind) or []:
+                sym = bare_symbol(row.symbol)
+                if sym in in_scope:
+                    per_symbol.setdefault(sym, {}).setdefault(kind, []).append(
+                        row.model_dump(exclude={"symbol"}))
+        events = []
+        for sym, body in sorted(per_symbol.items()):
+            ca = CorporateActions.model_validate({"symbol": f"{sym}.JK", "corporate_actions": body})
+            events.extend(self._corporate_events(result.call_id, ca, start, end,
+                                                 tool="corporate-actions-calendar"))
+        return events
+
     def _corporate_events(self, call_id: str, ca: CorporateActions, start: date,
-                          end: date) -> list[Event]:
+                          end: date, tool: str = "fetch-corporate-actions") -> list[Event]:
         sym = bare_symbol(ca.symbol)
         body = ca.corporate_actions
         as_of = self.state.as_of
@@ -172,7 +211,7 @@ class DiscoveryAgent:
             if not start <= d <= end:
                 continue
             ev = self.state.add_evidence(
-                call_id=call_id, tool="fetch-corporate-actions", symbol=sym, period=day,
+                call_id=call_id, tool=tool, symbol=sym, period=day,
                 field=f"corporate_actions.{etype}", value=day, unit="date",
                 source_ref=f"fetch-corporate-actions {sym} {etype} {day}",
             )

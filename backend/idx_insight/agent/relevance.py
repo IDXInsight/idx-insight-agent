@@ -32,8 +32,9 @@ from idx_insight.analytics.numbers import fmt_share_pct
 from idx_insight.llm.types import LLMToolDefinition
 from idx_insight.models import Event
 
-# Estimated tool calls to research one company (company report + quarterly financials).
-SECOND_HOP_CALL_COST = 2
+# Estimated Sectors calls to research one company: company report, latest quarter
+# and the same quarter one year earlier.
+SECOND_HOP_CALL_COST = 3
 # Most material events researched regardless of the LLM's choice.
 GUARANTEED_SECOND_HOP = 2
 
