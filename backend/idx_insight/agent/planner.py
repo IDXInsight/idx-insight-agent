@@ -36,7 +36,9 @@ ALLOWED: dict[str, set[str]] = {
 REQUIRED: dict[str, set[str]] = {
     "discovery": {"discover_events", "rank_relevance"},
     "peer_comparison": {"retrieve_financial_context", "compare_peers"},
-    "company_context": {"retrieve_financial_context", "company_trends"},
+    # Company context always covers related events: "what deserves attention" is the core.
+    "company_context": {"retrieve_financial_context", "company_trends", "discover_events",
+                        "rank_relevance"},
 }
 
 
