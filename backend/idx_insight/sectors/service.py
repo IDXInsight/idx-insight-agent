@@ -6,6 +6,8 @@ Responsibilities:
 - bounded retry for transient failures (never blind retry loops)
 - response cache (identical calls within a request are served once)
 - call log: every call gets a ``call_id`` that evidence items point to
+- schema guard: a response that does not match the documented shape is reported
+  as ``malformed`` instead of crashing the agent
 
 Errors never propagate as exceptions to the agent; they come back as a failed
 ``ToolResult`` so the agent can make an explicit recovery decision.
@@ -17,7 +19,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, Literal, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from idx_insight.sectors.adapter import SectorsAdapter, SectorsError, SectorsNotFoundError
 from idx_insight.sectors.schemas import (
@@ -44,7 +46,7 @@ TOOL_NAMES: dict[str, str] = {
 
 DEFAULT_ALLOWLIST: frozenset[str] = frozenset(TOOL_NAMES.values())
 
-CallStatus = Literal["ok", "error", "not_found", "not_allowed", "budget_exhausted"]
+CallStatus = Literal["ok", "error", "not_found", "not_allowed", "budget_exhausted", "malformed"]
 
 
 class ToolCallRecord(BaseModel):
@@ -88,10 +90,6 @@ class SectorsService:
         self._cache: dict[str, ToolResult[Any]] = {}
 
     @property
-    def data_source(self) -> str:
-        return self.adapter.name
-
-    @property
     def attempts_made(self) -> int:
         """Adapter invocations so far; retries count against the budget too."""
         return sum(c.attempts for c in self.calls)
@@ -131,6 +129,13 @@ class SectorsService:
                 result: ToolResult[T] = ToolResult(call_id, tool, "not_found", error=str(exc))
                 self._cache[key] = result
                 return result
+            except ValidationError as exc:
+                # Not retried: the same source would return the same shape again.
+                first = exc.errors()[0] if exc.errors() else {}
+                where = ".".join(str(p) for p in first.get("loc", ()))
+                record.status = "malformed"
+                record.error = f"response does not match schema at '{where}': {first.get('msg', '')}"
+                return ToolResult(call_id, tool, "malformed", error=record.error)
             except SectorsError as exc:
                 last_error = str(exc)
                 if not exc.retryable:

@@ -5,6 +5,7 @@ agent's recovery paths:
 
     MockSectorsAdapter(failures={"get_corporate_actions:BBNI": 1})         # fails once
     MockSectorsAdapter(failures={"get_filings:*": "always"})                # always fails
+    MockSectorsAdapter(failures={"get_company_report:BBCA": "malformed"})   # bad payload
 """
 
 from __future__ import annotations
@@ -46,11 +47,18 @@ class MockSectorsAdapter(SectorsAdapter):
             if key is None or key not in self._failures:
                 continue
             remaining = self._failures[key]
+            if remaining == "malformed":
+                self._malformed()
             if remaining == "always":
                 raise SectorsUnavailableError(f"mock outage for {key}")
             if isinstance(remaining, int) and remaining > 0:
                 self._failures[key] = remaining - 1
                 raise SectorsUnavailableError(f"mock transient failure for {key}")
+
+    @staticmethod
+    def _malformed() -> None:
+        """Simulate a payload that violates the documented response shape."""
+        CorporateActions.model_validate({"symbol": None, "corporate_actions": []})
 
     @staticmethod
     def _known(symbol: str) -> str:

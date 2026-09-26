@@ -87,3 +87,11 @@ def test_injected_transient_failure_then_recovers():
 def test_build_adapter_real_mode_is_not_implemented():
     with pytest.raises(NotImplementedError):
         build_adapter(Settings(sectors_data_mode="real"))
+
+
+def test_injected_malformed_payload_raises_validation_error():
+    from pydantic import ValidationError
+
+    adapter = MockSectorsAdapter(failures={"get_filings:*": "malformed"})
+    with pytest.raises(ValidationError):
+        adapter.get_filings(sub_sector="banks")
