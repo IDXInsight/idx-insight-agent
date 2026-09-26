@@ -46,6 +46,8 @@ TOOL_NAMES: dict[str, str] = {
     "get_corporate_actions": "fetch-corporate-actions",
     # Market-wide calendar; REST only (GET /v2/corporate-actions/), no MCP tool listed.
     "get_corporate_actions_calendar": "corporate-actions-calendar",
+    # Company screener used for batched metrics (REST GET /v2/companies/).
+    "get_company_metrics": "company-screener",
     "get_filings": "fetch-filings",
 }
 
@@ -209,6 +211,14 @@ class SectorsService:
             "get_corporate_actions_calendar",
             lambda: self.adapter.get_corporate_actions_calendar(start, end, types),
             {"start": start, "end": end, "types": list(types)},
+        )
+
+    def company_metrics(self, symbols: list[str],
+                        fields: list[str]) -> ToolResult[dict[str, dict[str, float]]]:
+        return self._invoke(
+            "get_company_metrics",
+            lambda: self.adapter.get_company_metrics(symbols, fields),
+            {"symbols": sorted(symbols), "fields": list(fields)},
         )
 
     def filings(

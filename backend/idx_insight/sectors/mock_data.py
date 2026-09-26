@@ -159,6 +159,18 @@ _OVERVIEW = {
 }
 
 
+# Fictional year-end non-performing loans and gross loans (screener yearly fields).
+# BTPS has no 2025 values, like a company missing from a screener result.
+SCREENER_YEARLY: dict[str, dict[str, float]] = {
+    "BBCA": {"non_performing_loan[2025]": 19.2 * T, "gross_loan[2025]": 960 * T},
+    "BBRI": {"non_performing_loan[2025]": 42.9 * T, "gross_loan[2025]": 1430 * T},
+    "BMRI": {"non_performing_loan[2025]": 19.7 * T, "gross_loan[2025]": 1640 * T},
+    "BBNI": {"non_performing_loan[2025]": 16.9 * T, "gross_loan[2025]": 805 * T},
+    "BBTN": {"non_performing_loan[2025]": 11.6 * T, "gross_loan[2025]": 350 * T},
+    "BRIS": {"non_performing_loan[2025]": 5.5 * T, "gross_loan[2025]": 292 * T},
+}
+
+
 def market_cap(symbol: str) -> float:
     return _OVERVIEW[symbol]["market_cap"]
 

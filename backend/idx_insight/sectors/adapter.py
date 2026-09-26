@@ -49,6 +49,7 @@ class SectorsAdapter(ABC):
       get_quarterly_financial_dates  fetch-quarterly-financial-dates
       get_corporate_actions      fetch-corporate-actions
       get_corporate_actions_calendar  REST /v2/corporate-actions/ (market-wide)
+      get_company_metrics        REST /v2/companies/ screener (many companies, one call)
       get_filings                fetch-filings
     """
 
@@ -82,6 +83,15 @@ class SectorsAdapter(ABC):
         self, start: str, end: str, types: Sequence[str] = ("agm", "dividend", "stock_split")
     ) -> CorporateActionsCalendar:
         """Corporate actions of every listed company in a window (at most 90 days)."""
+
+    @abstractmethod
+    def get_company_metrics(self, symbols: Sequence[str],
+                            fields: Sequence[str]) -> dict[str, dict[str, float]]:
+        """Screener fields (e.g. ``non_performing_loan[2025]``) for several companies.
+
+        Returns ``{bare symbol: {field: value}}``. Companies without a value for every
+        requested field are omitted, as the screener's filter excludes them.
+        """
 
     @abstractmethod
     def get_filings(

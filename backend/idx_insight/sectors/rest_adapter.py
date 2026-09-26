@@ -28,6 +28,10 @@ from idx_insight.sectors.schemas import (
 _SYMBOL = re.compile(r"^[A-Z]{4}$")
 _SLUG = re.compile(r"^[a-z]+(-[a-z]+)*$")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# Screener field, optionally with a period: roe[2025], earnings_q[Q2-2026].
+_FIELD = re.compile(r"^[a-z][a-z0-9_]*(\[(\d{4}|Q[1-4]-\d{4})\])?$")
+# Lower bound that keeps every real value while making the screener return it.
+_ANY_VALUE = "-1000000000000000000"
 _SCREENER_MAX_LIMIT = 200
 
 
@@ -98,6 +102,31 @@ class RestSectorsAdapter(SectorsAdapter):
         body = self.client.get("/v2/corporate-actions/",
                                {"start": start, "end": end, "type": ",".join(types)})
         return CorporateActionsCalendar.model_validate(body)
+
+    def get_company_metrics(self, symbols: Sequence[str],
+                            fields: Sequence[str]) -> dict[str, dict[str, float]]:
+        bare = sorted({_symbol(s) for s in symbols})
+        for field in fields:
+            if not _FIELD.match(field):
+                raise SectorsError(f"invalid screener field {field!r}")
+        if not bare or not fields:
+            return {}
+        # Verified 2026-09-27: the screener matches symbols only with the ".JK" suffix,
+        # and returns in ``query_values`` the fields used in ``where`` / ``order_by``.
+        # The filter also drops companies with a missing value.
+        listed = ", ".join(f"'{s}.JK'" for s in bare)
+        conditions = " and ".join(f"{f} > {_ANY_VALUE}" for f in fields)
+        body = self.client.get("/v2/companies/", {
+            "where": f"symbol in [{listed}] and {conditions}",
+            "limit": len(bare),
+            "include_query_values": "true",
+        })
+        out: dict[str, dict[str, float]] = {}
+        for row in body.get("results", []):
+            values = row.get("query_values") or {}
+            if all(values.get(f) is not None for f in fields):
+                out[bare_symbol(row["symbol"])] = {f: float(values[f]) for f in fields}
+        return out
 
     def get_filings(self, *, symbol: str | None = None, sub_sector: str | None = None,
                     start: str | None = None, end: str | None = None, limit: int = 20,

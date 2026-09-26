@@ -134,6 +134,17 @@ class MockSectorsAdapter(SectorsAdapter):
             body[kind] = sorted(rows, key=lambda r: (r[date_key[kind]], r["symbol"]))
         return CorporateActionsCalendar.model_validate(body)
 
+    def get_company_metrics(self, symbols: Sequence[str],
+                            fields: Sequence[str]) -> dict[str, dict[str, float]]:
+        self._maybe_fail("get_company_metrics")
+        out: dict[str, dict[str, float]] = {}
+        for symbol in symbols:
+            bare = bare_symbol(symbol)
+            values = mock_data.SCREENER_YEARLY.get(bare, {})
+            if bare in mock_data.COMPANIES and all(f in values for f in fields):
+                out[bare] = {f: values[f] for f in fields}
+        return out
+
     def get_filings(
         self,
         *,
