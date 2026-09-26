@@ -143,3 +143,25 @@ def test_health_reports_provider_and_model_but_no_keys(client):
         app.dependency_overrides.clear()
     assert body["llm_provider"] == "groq" and body["llm_model"] == "openai/gpt-oss-120b"
     assert "gsk-hidden" not in str(body)
+
+
+def test_language_is_detected_or_overridden(client):
+    english = post(client, "Which banking disclosures should I watch next week?").json()
+    assert english["language"] == "en"
+    assert english["briefing"]["sections"][0]["heading"] == "Events worth attention"
+    forced = post(client, DISCOVERY_Q, language="en").json()
+    assert forced["language"] == "en"
+    assert post(client, DISCOVERY_Q).json()["language"] == "id"
+    assert post(client, DISCOVERY_Q, language="fr").status_code == 422
+
+
+def test_capabilities_list_bilingual_metric_labels(client):
+    metrics = client.get("/v1/capabilities").json()["metrics"]
+    assert metrics["earnings_growth_yoy"] == {"id": "Pertumbuhan laba YoY",
+                                              "en": "Earnings growth YoY"}
+
+
+def test_event_findings_explain_why(client):
+    body = post(client, DISCOVERY_Q).json()
+    events = body["briefing"]["sections"][0]["findings"]
+    assert all(f["why"].startswith("Relevan karena") for f in events)

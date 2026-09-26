@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from idx_insight.agent.language import Language
 from idx_insight.agent.state import (
     Briefing,
     EvidenceAssessment,
@@ -24,6 +25,8 @@ class QueryRequest(BaseModel):
     as_of: date | None = Field(default=None, description="Reference date; defaults to today.")
     watchlist: list[str] = Field(default=[], max_length=20)
     sub_sector: str | None = Field(default=None, max_length=64)
+    language: Language | None = Field(
+        default=None, description="Briefing language; detected from the query when omitted.")
 
     @field_validator("watchlist")
     @classmethod
@@ -88,6 +91,7 @@ class ToolCallOut(BaseModel):
 
 class QueryResponse(BaseModel):
     status: str
+    language: Language
     data_source: str
     llm_provider: str
     briefing: Briefing

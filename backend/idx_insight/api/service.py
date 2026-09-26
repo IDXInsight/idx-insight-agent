@@ -28,7 +28,7 @@ class AgentService:
 
     def run(self, request: QueryRequest) -> AgentState:
         return self.agent.run(request.query, as_of=request.as_of, watchlist=request.watchlist,
-                              sub_sector=request.sub_sector)
+                              sub_sector=request.sub_sector, language=request.language)
 
     def query(self, request: QueryRequest) -> QueryResponse:
         return to_response(self.run(request), data_source=self.adapter.name,
@@ -42,6 +42,7 @@ def to_response(state: AgentState, *, data_source: str, llm_provider: str) -> Qu
     tf = state.timeframe
     return QueryResponse(
         status=state.status,
+        language=state.language,
         data_source=data_source,
         llm_provider=llm_provider,
         briefing=state.briefing,
