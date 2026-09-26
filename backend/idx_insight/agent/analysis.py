@@ -6,6 +6,7 @@ Claims are proposals: the Evidence Validator decides which may be stated.
 from __future__ import annotations
 
 from idx_insight.agent.financials import FinancialContext
+from idx_insight.agent.i18n import t
 from idx_insight.agent.state import AgentState
 from idx_insight.analytics.metrics import EVENT_CONTEXT_METRICS, METRICS
 from idx_insight.analytics.numbers import fmt_idr, fmt_pct, fmt_pp
@@ -14,16 +15,16 @@ from idx_insight.analytics.periods import align_latest_common, prior_year_period
 from idx_insight.models import MetricValue
 
 
-def _value_claim(state: AgentState, mv: MetricValue, section: str, prefix: str = "",
-                 **meta) -> None:
-    spec = METRICS[mv.metric]
-    text = f"{prefix}{spec.label} {mv.symbol} {quarter_label(mv.period)}: {fmt_pct(mv.value)}"
+def _value_claim(state: AgentState, mv: MetricValue, section: str, **meta) -> None:
+    lang = state.language
+    text = t(lang, "claim.value", label=METRICS[mv.metric].label_in(lang), sym=mv.symbol,
+             period=quarter_label(mv.period), value=fmt_pct(mv.value, lang))
     if mv.metric.endswith("_growth_yoy") and {"current", "previous"} <= set(mv.inputs):
         cur = state.evidence[mv.inputs["current"]].value
         prev = state.evidence[mv.inputs["previous"]].value
         if isinstance(cur, (int, float)) and isinstance(prev, (int, float)):
-            text += (f" ({fmt_idr(cur)} vs {fmt_idr(prev)} pada "
-                     f"{quarter_label(prior_year_period(mv.period))})")
+            text += t(lang, "claim.growth_inputs", cur=fmt_idr(cur, lang), prev=fmt_idr(prev, lang),
+                      prev_period=quarter_label(prior_year_period(mv.period)))
     state.add_claim(
         kind="calculation" if mv.derived else "metric",
         statement=text, symbols=[mv.symbol], metric=mv.metric, period=mv.period, value=mv.value,
@@ -45,33 +46,31 @@ def _series(ctx: FinancialContext, symbol: str, metric: str,
 
 def peer_comparison(state: AgentState, ctx: FinancialContext, symbols: list[str],
                     metrics: list[str]) -> None:
+    lang = state.language
     requested = state.timeframe.financial_period if state.timeframe else None
     peer_results = state.analytics.setdefault("peer_comparison", {})
     for metric in metrics:
-        spec = METRICS[metric]
+        label = METRICS[metric].label_in(lang)
         series = {sym: _series(ctx, sym, metric, requested) for sym in symbols}
         if requested:
             for sym, vals in series.items():
                 if not vals:
-                    state.add_gap("unavailable_period",
-                                  f"{spec.label} {sym} untuk periode {quarter_label(requested)} "
-                                  "tidak tersedia.", sym)
+                    state.add_gap("unavailable_period", t(lang, "gap.unavailable_period", label=label,
+                                                          sym=sym, period=quarter_label(requested)),
+                                  sym)
         alignment = align_latest_common({s: list(v) for s, v in series.items()})
         chosen = {s: series[s][p] for s, p in alignment.per_symbol.items() if p}
         if alignment.ahead:
-            state.assumptions.append(
-                f"{spec.label}: dibandingkan pada periode bersama {quarter_label(alignment.period)}; "
-                f"{', '.join(alignment.ahead)} sudah memiliki data lebih baru."
-            )
+            state.assumptions.append(t(lang, "assumption.common_period", label=label,
+                                       period=quarter_label(alignment.period),
+                                       ahead=", ".join(alignment.ahead)))
         for mv in chosen.values():
             _value_claim(state, mv, "peer")
 
         conflicted = sorted({c.symbol for c in state.conflicts if c.metric == metric} & set(chosen))
         if conflicted:
-            state.assumptions.append(
-                f"{spec.label}: {', '.join(conflicted)} dikeluarkan dari perbandingan karena "
-                "nilai antar-sumber bertentangan."
-            )
+            state.assumptions.append(t(lang, "assumption.conflicted_excluded", label=label,
+                                       syms=", ".join(conflicted)))
             chosen = {s: mv for s, mv in chosen.items() if s not in conflicted}
         comp = compare_peers(metric, alignment.period, {s: mv.value for s, mv in chosen.items()})
         peer_results[metric] = {
@@ -81,16 +80,16 @@ def peer_comparison(state: AgentState, ctx: FinancialContext, symbols: list[str]
             "missing": alignment.missing,
         }
         if not comp.sufficient:
-            state.add_gap("insufficient_evidence",
-                          f"{spec.label}: kurang dari dua emiten dengan data yang dapat dibandingkan.")
+            state.add_gap("insufficient_evidence", t(lang, "gap.too_few_peers", label=label))
             continue
-        label = quarter_label(alignment.period) if alignment.period else "periode berbeda"
-        text = (f"{spec.label} ({label}): tertinggi {comp.highest} "
-                f"{fmt_pct(chosen[comp.highest].value)}, terendah {comp.lowest} "
-                f"{fmt_pct(chosen[comp.lowest].value)}, selisih {fmt_pp(comp.range)}, "
-                f"median {fmt_pct(comp.median)}")
+        period_label = (quarter_label(alignment.period) if alignment.period
+                        else t(lang, "period.mixed"))
+        text = t(lang, "claim.comparison", label=label, period=period_label,
+                 hi=comp.highest, hi_v=fmt_pct(chosen[comp.highest].value, lang),
+                 lo=comp.lowest, lo_v=fmt_pct(chosen[comp.lowest].value, lang),
+                 range=fmt_pp(comp.range, lang), median=fmt_pct(comp.median, lang))
         if comp.outliers:
-            text += f"; {', '.join(comp.outliers)} menyimpang jauh dari median peer"
+            text += t(lang, "claim.comparison_outliers", syms=", ".join(comp.outliers))
         state.add_claim(
             kind="comparison", statement=text, symbols=list(chosen), metric=metric,
             period=alignment.period, value=comp.range,
@@ -102,6 +101,7 @@ def peer_comparison(state: AgentState, ctx: FinancialContext, symbols: list[str]
 
 def company_trends(state: AgentState, ctx: FinancialContext, symbol: str,
                    metrics: list[str]) -> None:
+    lang = state.language
     for metric in metrics:
         values = sorted(ctx.metric_values(symbol, metric), key=lambda mv: mv.period)
         if not values:
@@ -116,8 +116,9 @@ def company_trends(state: AgentState, ctx: FinancialContext, symbol: str,
         delta = latest.value - prev.value
         state.add_claim(
             kind="calculation",
-            statement=(f"{METRICS[metric].label} {symbol} {latest.period} vs {prev.period}: "
-                       f"{fmt_pct(latest.value)} vs {fmt_pct(prev.value)} ({fmt_pp(delta)})"),
+            statement=t(lang, "claim.trend", label=METRICS[metric].label_in(lang), sym=symbol,
+                        p1=latest.period, p0=prev.period, v1=fmt_pct(latest.value, lang),
+                        v0=fmt_pct(prev.value, lang), delta=fmt_pp(delta, lang)),
             symbols=[symbol], metric=metric, period=latest.period, value=delta,
             evidence_ids=latest.evidence_ids + prev.evidence_ids,
             required_inputs=["current", "previous"],

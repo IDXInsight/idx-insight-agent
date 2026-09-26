@@ -8,6 +8,9 @@ from idx_insight.analytics.events import (
 )
 from idx_insight.analytics.numbers import (
     fmt_idr,
+    fmt_pct,
+    fmt_pp,
+    fmt_share_pct,
     normalize_ratio,
     pct_change,
     robust_outliers,
@@ -50,9 +53,15 @@ def test_robust_outliers_needs_enough_peers():
     assert robust_outliers(values) == ["E"]
 
 
-def test_fmt_idr():
-    assert fmt_idr(15.1e12) == "Rp15.1 T"
-    assert fmt_idr(218.4e9) == "Rp218.4 M"
+def test_number_formatting_follows_language():
+    assert fmt_idr(15.1e12) == "Rp15,1 triliun"
+    assert fmt_idr(218.4e9, "en") == "IDR 218.4 bn"
+    assert fmt_idr(135) == "Rp135"
+    assert fmt_pct(0.235) == "23,5%" and fmt_pct(0.235, "en") == "23.5%"
+    assert fmt_pp(-0.108) == "-10,8 pp" and fmt_pp(0.12, "en") == "+12.0 pp"
+    assert fmt_share_pct(1.05) == "1,05%"
+    assert fmt_idr(1_234_567_000_000_000, "en") == "IDR 1,234.6 tn"
+    assert fmt_idr(1_234_567_000_000_000) == "Rp1.234,6 triliun"
 
 
 # --- periods ---------------------------------------------------------------
@@ -128,7 +137,7 @@ def test_large_ownership_change_scores_above_threshold():
                 holder_type="institution")
     score, reasons = score_event(ev, RelevanceContext(frozenset(), {}))
     assert score == 40
-    assert any("≥1%" in r for r in reasons)
+    assert reasons == [("ownership_large", {"pct": 1.3})]  # codes; text is rendered per language
 
 
 def test_small_insider_trade_scores_low():
@@ -143,4 +152,4 @@ def test_forward_looking_clustered_watchlist_event():
                title="t", source_ref="s", forward_looking=True)
     score, reasons = score_event(ev, RelevanceContext(frozenset({"BBRI"}), {"BBRI": 2}))
     assert score == 35 + 10 + 10 + 5
-    assert len(reasons) == 4
+    assert [code for code, _ in reasons] == ["dividend_ex", "forward", "cluster", "watchlist"]

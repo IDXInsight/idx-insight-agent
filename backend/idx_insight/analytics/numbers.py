@@ -55,16 +55,39 @@ def robust_outliers(values: dict[str, float], threshold: float = 2.5, min_n: int
     return sorted(k for k, v in values.items() if abs(0.6745 * (v - med) / mad) > threshold)
 
 
-def fmt_pct(value: float, decimals: int = 1) -> str:
-    return f"{value * 100:.{decimals}f}%"
+def _fmt(x: float, decimals: int, lang: str, sign: bool = False) -> str:
+    """Locale-aware number: English 1,234.5 / Indonesian 1.234,5."""
+    text = f"{x:{'+' if sign else ''},.{decimals}f}"
+    if lang == "id":
+        text = text.replace(",", "_").replace(".", ",").replace("_", ".")
+    return text
 
 
-def fmt_pp(value: float, decimals: int = 1) -> str:
-    return f"{value * 100:+.{decimals}f} pp"
+def fmt_pct(value: float, lang: str = "id", decimals: int = 1) -> str:
+    """Fraction → percent (0.235 → 23,5% / 23.5%)."""
+    return f"{_fmt(value * 100, decimals, lang)}%"
 
 
-def fmt_idr(value: float) -> str:
-    for size, label in ((1e12, "T"), (1e9, "M")):
+def fmt_share_pct(points: float, lang: str = "id") -> str:
+    """Value already in percentage points (1.05 → 1,05% / 1.05%)."""
+    return f"{_fmt(points, 2, lang)}%"
+
+
+def fmt_pp(value: float, lang: str = "id", decimals: int = 1) -> str:
+    """Difference of two fractions in percentage points (0.12 → +12,0 pp)."""
+    return f"{_fmt(value * 100, decimals, lang, sign=True)} pp"
+
+
+_IDR_UNITS = {
+    "id": ((1e12, "triliun"), (1e9, "miliar"), (1e6, "juta")),
+    "en": ((1e12, "tn"), (1e9, "bn"), (1e6, "mn")),
+}
+
+
+def fmt_idr(value: float, lang: str = "id") -> str:
+    """Rupiah amount (15.1e12 → Rp15,1 triliun / IDR 15.1 tn)."""
+    prefix = "Rp" if lang == "id" else "IDR "
+    for size, unit in _IDR_UNITS[lang]:
         if abs(value) >= size:
-            return f"Rp{value / size:,.1f} {label}"
-    return f"Rp{value:,.0f}"
+            return f"{prefix}{_fmt(value / size, 1, lang)} {unit}"
+    return f"{prefix}{_fmt(value, 0, lang)}"

@@ -22,6 +22,10 @@ class MetricSpec:
     # quarterly_ratio: (numerator field, denominator field)
     path: str | tuple[str, str]
     banking_only: bool = False
+    label_en: str | None = None  # English label when it differs from ``label``
+
+    def label_in(self, lang: str) -> str:
+        return self.label_en if lang == "en" and self.label_en else self.label
 
 
 METRICS: dict[str, MetricSpec] = {
@@ -39,16 +43,20 @@ METRICS: dict[str, MetricSpec] = {
                    "liquidity.loan_to_deposit_ratio", banking_only=True),
         MetricSpec("capital_adequacy_ratio", "CAR", "report_ratio",
                    "capital.capital_adequacy_ratio", banking_only=True),
-        MetricSpec("earnings_growth_yoy", "Pertumbuhan laba YoY", "quarterly_growth", "earnings"),
+        MetricSpec("earnings_growth_yoy", "Pertumbuhan laba YoY", "quarterly_growth", "earnings",
+                   label_en="Earnings growth YoY"),
         MetricSpec("revenue_growth_yoy", "Pertumbuhan pendapatan YoY", "quarterly_growth",
-                   "revenue"),
+                   "revenue", label_en="Revenue growth YoY"),
         MetricSpec("nii_growth_yoy", "Pertumbuhan NII YoY", "quarterly_growth",
-                   "financials_sector_metrics.net_interest_income", banking_only=True),
+                   "financials_sector_metrics.net_interest_income", banking_only=True,
+                   label_en="NII growth YoY"),
         MetricSpec("loan_growth_yoy", "Pertumbuhan kredit YoY", "quarterly_growth",
-                   "financials_sector_metrics.gross_loan", banking_only=True),
+                   "financials_sector_metrics.gross_loan", banking_only=True,
+                   label_en="Loan growth YoY"),
         MetricSpec("ldr_quarterly", "LDR kuartalan (kredit/DPK)", "quarterly_ratio",
                    ("financials_sector_metrics.gross_loan",
-                    "financials_sector_metrics.total_deposit"), banking_only=True),
+                    "financials_sector_metrics.total_deposit"), banking_only=True,
+                   label_en="Quarterly LDR (loans/deposits)"),
     ]
 }
 

@@ -4,8 +4,9 @@ from datetime import date
 import pytest
 from conftest import AS_OF
 
+from idx_insight.agent.prompts import NarrativeProposal, NarrativeSentence
 from idx_insight.agent.state import AgentState, Conflict, Intent, Timeframe
-from idx_insight.agent.synthesis import guard_narrative
+from idx_insight.agent.synthesis import validate_narrative
 from idx_insight.agent.validator import EvidenceValidator
 from idx_insight.llm.mock import MockLLMProvider
 
@@ -115,41 +116,71 @@ def test_event_outside_window_is_rejected(state):
     assert "wrong_period" in codes(state, claim)
 
 
-# --- synthesis guard -------------------------------------------------------------
+# --- cited narrative validation --------------------------------------------------------
 
-FACTS = ["ROE BBCA 2025: 23.5%", "ROE BBRI 2025: 18.0%"]
-
-
-def test_guard_accepts_grounded_narrative():
-    text = "ROE BBCA 2025 sebesar 23.5%, lebih tinggi dari BBRI (18.0%). Ini bukan rekomendasi beli."
-    assert guard_narrative(text, FACTS) is None
+ITEMS = {"cl-001": "ROE BBCA 2025: 23,5%", "cl-002": "ROE BBRI 2025: 18,0%",
+         "gap-1": "NPL tidak tersedia sebagai field terdokumentasi di Sectors."}
 
 
-def test_guard_rejects_advice_language():
-    assert "advice" in guard_narrative("Sebaiknya investor beli BBCA.", FACTS)
+def narrative(*sentences):
+    return NarrativeProposal(sentences=[NarrativeSentence(text=s, citations=c)
+                                        for s, c in sentences])
 
 
-def test_guard_rejects_ungrounded_numbers():
-    assert "ungrounded" in guard_narrative("ROE BBCA mencapai 25.1% pada 2025.", FACTS)
+def test_cited_grounded_narrative_is_accepted():
+    sentences, error = validate_narrative(narrative(
+        ("ROE BBCA 2025 sebesar 23,5%, di atas BBRI 18,0%.", ["cl-001", "cl-002"]),
+        ("Data NPL belum tersedia; ini bukan rekomendasi beli.", ["gap-1"]),
+    ), ITEMS)
+    assert error is None and [s.citations for s in sentences] == [["cl-001", "cl-002"], ["gap-1"]]
+
+
+@pytest.mark.parametrize("sentence, citations, message", [
+    ("ROE BBCA 23,5%.", [], "no citation"),
+    ("ROE BBCA 23,5%.", ["cl-999"], "unknown citation"),
+    ("ROE BBCA 25,1% pada 2025.", ["cl-001"], "number 25,1"),
+    ("ROE BBRI 18,0%.", ["cl-001"], "number 18,0"),  # number exists, but not in the cited item
+    ("Sebaiknya investor beli BBCA.", ["cl-001"], "advice"),
+    ("ROE BBCA menandakan prospek cerah.", ["cl-001"], "speculative"),
+    ("BBCA's ROE signals strong momentum.", ["cl-001"], "speculative"),
+])
+def test_narrative_sentences_are_rejected(sentence, citations, message):
+    sentences, error = validate_narrative(narrative((sentence, citations)), ITEMS)
+    assert sentences is None and message in error
+
+
+def test_narrative_length_is_bounded():
+    too_many = narrative(*[("ROE BBCA 23,5%.", ["cl-001"])] * 7)
+    assert "too many" in validate_narrative(too_many, ITEMS)[1]
 
 
 # --- agent-level behaviour ----------------------------------------------------------
 
 
-def test_grounded_llm_narrative_is_used(run):
-    llm = MockLLMProvider(
-        {"synthesis": MockLLMProvider.text("Profitabilitas BBCA menonjol di antara peer.")})
+def claim_id(state, text):
+    return next(c.claim_id for c in state.claims if text in c.statement)
+
+
+def test_cited_llm_narrative_is_used(run):
+    baseline = run("Bandingkan ROE BBCA dan BBRI")
+    bbca = claim_id(baseline, "ROE BBCA 2025")
+    llm = MockLLMProvider({"synthesis": MockLLMProvider.structured(narrative(
+        ("ROE BBCA 2025 tercatat 23,5%.", [bbca])))})
     state = run("Bandingkan ROE BBCA dan BBRI", llm=llm)
     assert state.briefing.synthesis_mode == "llm"
-    assert state.briefing.narrative.startswith("Profitabilitas")
+    assert state.briefing.narrative[0].citations == [bbca]
 
 
-def test_ungrounded_llm_narrative_falls_back_to_template(run):
-    llm = MockLLMProvider({"synthesis": MockLLMProvider.text("ROE BBCA 31.2%, sebaiknya dibeli.")})
+def test_invalid_llm_narrative_falls_back_to_template(run):
+    baseline = run("Bandingkan ROE BBCA dan BBRI")
+    bbca = claim_id(baseline, "ROE BBCA 2025")
+    llm = MockLLMProvider({"synthesis": MockLLMProvider.structured(narrative(
+        ("ROE BBCA 31,2%, sebaiknya dibeli.", [bbca])))})
     state = run("Bandingkan ROE BBCA dan BBRI", llm=llm)
     assert state.briefing.synthesis_mode == "template"
     assert state.briefing.narrative is None
     assert any(t.stage == "LLM narrative rejected" for t in state.trace)
+    assert state.briefing.sections  # the deterministic briefing is still complete
 
 
 def test_llm_only_sees_validated_facts(run):
@@ -157,8 +188,9 @@ def test_llm_only_sees_validated_facts(run):
     run("Bandingkan BBCA dan BMRI dari sisi pertumbuhan", llm=llm)
     prompt = next(r for r in llm.requests if r.purpose == "synthesis").messages[-1].content
     # BMRI growth is contradictory and must not reach the LLM as a fact.
-    facts_block = prompt.split("Kesenjangan data:")[0]
+    facts_block = prompt.split("Data gaps:")[0]
     assert "Pertumbuhan laba YoY BMRI" not in facts_block
+    assert "Write the briefing in Indonesian" in prompt
 
 
 def test_advice_request_gets_boundary_note(run):

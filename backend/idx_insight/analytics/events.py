@@ -1,7 +1,8 @@
 """Event normalization helpers, duplicate detection, density and relevance rules.
 
 Relevance is rule-based so it is reproducible and explainable. Scores are
-0–100; reasons are user-facing (Indonesian).
+0–100; reasons are returned as language-neutral codes with parameters and are
+rendered for the user by the Agent Brain.
 """
 
 from __future__ import annotations
@@ -15,12 +16,14 @@ from idx_insight.models import Event
 RELEVANT_THRESHOLD = 40
 SECOND_HOP_THRESHOLD = 50
 
-_TYPE_BASE: dict[str, tuple[int, str]] = {
-    "dividend_ex": (35, "Tanggal ex-dividen menentukan hak atas dividen"),
-    "dividend_payment": (15, "Jadwal pembayaran dividen"),
-    "agm": (30, "RUPS dapat memutuskan dividen, susunan pengurus, atau aksi korporasi"),
-    "stock_split": (30, "Stock split mengubah jumlah dan harga nominal saham"),
+_TYPE_BASE: dict[str, int] = {
+    "dividend_ex": 35,
+    "dividend_payment": 15,
+    "agm": 30,
+    "stock_split": 30,
 }
+
+Reason = tuple[str, dict[str, float]]  # (code, parameters)
 
 LARGE_OWNERSHIP_PCT = 1.0  # percentage points of shares outstanding
 MEDIUM_OWNERSHIP_PCT = 0.25
@@ -65,39 +68,38 @@ class RelevanceContext:
     density: dict[str, int]
 
 
-def score_event(ev: Event, ctx: RelevanceContext) -> tuple[int, list[str]]:
+def score_event(ev: Event, ctx: RelevanceContext) -> tuple[int, list[Reason]]:
     score, reasons = 0, []
 
     if ev.event_type == "ownership_change":
         pct = abs(ev.attributes.get("share_percentage_transaction") or 0.0)
         if pct >= LARGE_OWNERSHIP_PCT:
             score += 40
-            reasons.append(f"Perubahan kepemilikan {pct:.2f}% dari total saham (≥1%)")
+            reasons.append(("ownership_large", {"pct": pct}))
         elif pct >= MEDIUM_OWNERSHIP_PCT:
             score += 25
-            reasons.append(f"Perubahan kepemilikan {pct:.2f}% dari total saham")
+            reasons.append(("ownership_medium", {"pct": pct}))
         else:
             score += 10
         value = ev.attributes.get("transaction_value") or 0.0
         if value >= LARGE_TRANSACTION_IDR:
             score += 10
-            reasons.append("Nilai transaksi ≥ Rp500 miliar")
+            reasons.append(("large_value", {}))
         if ev.attributes.get("holder_type") == "insider":
             score += 10
-            reasons.append("Transaksi oleh orang dalam (insider)")
+            reasons.append(("insider", {}))
     else:
-        base, reason = _TYPE_BASE[ev.event_type]
-        score += base
-        reasons.append(reason)
+        score += _TYPE_BASE[ev.event_type]
+        reasons.append((ev.event_type, {}))
 
     if ev.forward_looking:
         score += 10
-        reasons.append("Terjadwal di dalam jendela waktu yang diminta")
+        reasons.append(("forward", {}))
     if ctx.density.get(ev.symbol, 0) >= 2:
         score += 10
-        reasons.append("Beberapa peristiwa emiten yang sama berdekatan")
+        reasons.append(("cluster", {}))
     if ev.symbol in ctx.watchlist:
         score += 5
-        reasons.append("Emiten ada di watchlist")
+        reasons.append(("watchlist", {}))
 
     return min(score, 100), reasons

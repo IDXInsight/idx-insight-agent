@@ -8,6 +8,7 @@ rule-based plan is used. Either way the chosen plan is recorded in state.
 
 from __future__ import annotations
 
+from idx_insight.agent.i18n import t
 from idx_insight.agent.llm_gateway import AgentLLM
 from idx_insight.agent.prompts import PLAN_SYSTEM, PlanProposal
 from idx_insight.agent.state import AgentState, Plan, PlanStep
@@ -35,19 +36,11 @@ ALLOWED: dict[str, set[str]] = {
 REQUIRED: dict[str, set[str]] = {
     "discovery": {"discover_events", "rank_relevance"},
     "peer_comparison": {"retrieve_financial_context", "compare_peers"},
-    "company_context": {"retrieve_financial_context", "company_trends"},
+    # Company context always covers related events: "what deserves attention" is the core.
+    "company_context": {"retrieve_financial_context", "company_trends", "discover_events",
+                        "rank_relevance"},
 }
 
-_REASONS = {
-    "discover_events": "Kumpulkan filing dan aksi korporasi dalam cakupan dan jendela waktu",
-    "rank_relevance": "Normalisasi, deduplikasi, dan nilai relevansi peristiwa dengan aturan deterministik",
-    "second_hop_context": "Ambil konteks keuangan untuk peristiwa yang cukup material",
-    "retrieve_financial_context": "Ambil data keuangan dan rasio dari Sectors",
-    "compare_peers": "Selaraskan periode lalu bandingkan metrik antar emiten",
-    "company_trends": "Hitung tren kinerja emiten",
-    "validate_evidence": "Periksa setiap klaim terhadap bukti",
-    "synthesize": "Susun ringkasan faktual dari klaim tervalidasi",
-}
 
 
 def rule_plan(state: AgentState) -> list[str]:
@@ -100,6 +93,7 @@ def check_plan(intent: str, steps: list[str], *, skip_second_hop: bool = False) 
 def build_plan(state: AgentState, llm: AgentLLM) -> Plan:
     assert state.intent is not None
     intent = state.intent.name
+    lang = state.language
     rejected: str | None = None
 
     if llm.enabled:
@@ -122,13 +116,13 @@ def build_plan(state: AgentState, llm: AgentLLM) -> Plan:
                                   skip_second_hop=state.intent.skip_second_hop)
             if rejected is None:
                 return Plan(
-                    steps=[PlanStep(name=s, reason=_REASONS[s]) for s in proposal.steps],
+                    steps=[PlanStep(name=s, reason=t(lang, f"step.{s}")) for s in proposal.steps],
                     source="llm",
                 )
 
     steps = rule_plan(state)
     return Plan(
-        steps=[PlanStep(name=s, reason=_REASONS[s]) for s in steps],  # type: ignore[arg-type]
+        steps=[PlanStep(name=s, reason=t(lang, f"step.{s}")) for s in steps],  # type: ignore[arg-type]
         source="rules",
         rejected_llm_plan=rejected,
     )

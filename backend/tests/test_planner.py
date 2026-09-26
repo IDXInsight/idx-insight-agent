@@ -73,3 +73,13 @@ def test_plan_checks():
     assert check_plan("clarify", ["synthesize"]) is not None
     assert check_plan("peer_comparison", ["retrieve_financial_context", "compare_peers",
                                           "validate_evidence", "synthesize"]) is None
+
+
+def test_llm_cannot_drop_related_events_from_company_context():
+    # Found in live testing: the model planned financials only for "Bagaimana kinerja BBCA?".
+    steps = ["retrieve_financial_context", "company_trends", "validate_evidence", "synthesize"]
+    provider = MockLLMProvider(
+        {"plan": MockLLMProvider.structured(PlanProposal(steps=steps, rationale="shorter"))})
+    plan = build_plan(state_for("company_context"), gateway(provider))
+    assert plan.source == "rules"
+    assert {"discover_events", "rank_relevance"} <= set(plan.names)

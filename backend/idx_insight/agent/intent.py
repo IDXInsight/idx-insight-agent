@@ -10,13 +10,13 @@ from idx_insight.agent.state import Entities, Intent
 from idx_insight.analytics.metrics import BUNDLES, KNOWN_UNSUPPORTED, METRICS
 
 _ADVICE = re.compile(
-    r"\b(beli|dibeli|jual|dijual|hold|buy|sell|layak|sebaiknya|rekomendasi|recommend\w*|"
-    r"target harga|price target|entry|cuan|serok|average down)\b"
+    r"\b(beli|dibeli|jual|dijual|hold|holding|buy|buying|sell|selling|layak|sebaiknya|"
+    r"rekomendasi|recommend\w*|worth|target harga|price target|entry|cuan|serok|average down)\b"
 )
 _DISCOVERY = re.compile(
     r"\b(disclosure|keterbukaan|pantau|memantau|monitor|event|peristiwa|agenda|jadwal|"
     r"aksi korporasi|corporate action|rups|agm|dividen|dividend|filing|pengumuman|"
-    r"perlu (saya )?(perhatikan|pantau)|watch)\w*"
+    r"perlu (saya )?(perhatikan|pantau)|watch|announcement|upcoming|pay attention)\w*"
 )
 _PEER = re.compile(
     r"\b(bandingkan|perbandingan|membandingkan|compare|comparison|versus|vs\.?|dibanding\w*)\b"

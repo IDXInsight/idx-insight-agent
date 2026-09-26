@@ -1,0 +1,87 @@
+[
+  {
+    "id": "discovery_banks_id",
+    "query": "Apa saja disclosure yang perlu saya pantau minggu depan untuk sektor perbankan?",
+    "expect": {"intent": "discovery", "language": "id", "status_in": ["completed", "partial"],
+               "min_relevant_events": 5, "must_research": ["BBNI", "BBRI"], "min_duplicates": 1}
+  },
+  {
+    "id": "discovery_banks_en",
+    "query": "Which banking disclosures should I watch next week?",
+    "expect": {"intent": "discovery", "language": "en", "status_in": ["completed", "partial"],
+               "min_relevant_events": 5, "must_research": ["BBNI", "BBRI"]}
+  },
+  {
+    "id": "discovery_list_only",
+    "query": "Disclosure perbankan minggu depan, daftar saja",
+    "expect": {"intent": "discovery", "min_relevant_events": 5, "max_research": 0}
+  },
+  {
+    "id": "discovery_watchlist",
+    "query": "Disclosure BBRI dan BBNI minggu depan",
+    "expect": {"intent": "discovery", "companies": ["BBRI", "BBNI"], "events_only_for": ["BBRI", "BBNI"]}
+  },
+  {
+    "id": "discovery_without_scope",
+    "query": "Apa saja disclosure minggu depan?",
+    "expect": {"status_in": ["needs_clarification"]}
+  },
+  {
+    "id": "ambiguous_company",
+    "query": "Disclosure bank syariah minggu depan",
+    "expect": {"status_in": ["needs_clarification"], "clarification_mentions": ["BRIS", "BTPS"]}
+  },
+  {
+    "id": "peer_profitability_id",
+    "query": "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi profitability dan efficiency",
+    "expect": {"intent": "peer_comparison", "language": "id", "status_in": ["partial"],
+               "peer_metrics": ["roa", "roe", "net_interest_margin", "cost_to_income_ratio"],
+               "conflict_symbols": ["BMRI"]}
+  },
+  {
+    "id": "peer_profitability_en",
+    "query": "Compare BBCA, BBRI, BMRI and BBNI on profitability",
+    "expect": {"intent": "peer_comparison", "language": "en", "peer_metrics": ["roe"],
+               "conflict_symbols": ["BMRI"]}
+  },
+  {
+    "id": "peer_unsupported_metric",
+    "query": "Bandingkan NPL BBCA dan BBRI",
+    "expect": {"intent": "peer_comparison", "gap_kinds": ["unsupported_metric"]}
+  },
+  {
+    "id": "peer_stale_common_period",
+    "query": "Bandingkan ROE BBCA dan BTPS",
+    "expect": {"intent": "peer_comparison", "peer_periods": {"roe": "2024"}}
+  },
+  {
+    "id": "peer_unavailable_period",
+    "query": "Bandingkan ROE BBCA dan BBRI tahun 2023",
+    "expect": {"status_in": ["insufficient_evidence"], "gap_kinds": ["unavailable_period"]}
+  },
+  {
+    "id": "peer_non_bank_metric",
+    "query": "Bandingkan NIM BBCA dan TLKM",
+    "expect": {"intent": "peer_comparison", "gap_kinds": ["not_applicable"]}
+  },
+  {
+    "id": "unknown_ticker",
+    "query": "Bandingkan BBCA dan ABCD",
+    "expect": {"gap_kinds": ["unknown_company"]}
+  },
+  {
+    "id": "company_context",
+    "query": "Bagaimana kinerja BBCA?",
+    "expect": {"intent": "company_context", "companies": ["BBCA"], "status_in": ["completed", "partial"]}
+  },
+  {
+    "id": "advice_request_id",
+    "query": "Apakah BBCA layak dibeli?",
+    "expect": {"intent": "company_context", "advice_requested": true}
+  },
+  {
+    "id": "advice_request_en",
+    "query": "Is BBCA worth buying?",
+    "expect": {"language": "en", "advice_requested": true}
+  }
+]

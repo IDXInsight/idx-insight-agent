@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from idx_insight.agent.i18n import t
 from idx_insight.agent.recovery import record_tool_failure
 from idx_insight.agent.state import AgentState, Conflict, RecoveryAction
 from idx_insight.analytics.metrics import METRICS, MetricSpec
-from idx_insight.analytics.numbers import normalize_ratio, pct_change, safe_div
+from idx_insight.analytics.numbers import fmt_pct, normalize_ratio, pct_change, safe_div
 from idx_insight.analytics.periods import prior_year_period, quarter_label
 from idx_insight.models import MetricValue
 from idx_insight.sectors.schemas import CompanyReport, QuarterlyFinancial
@@ -53,6 +54,10 @@ class FinancialContext:
 
     # -- loading ---------------------------------------------------------------
 
+    @property
+    def lang(self) -> str:
+        return self.state.language
+
     def _data(self, symbol: str) -> _CompanyData:
         return self._companies.setdefault(symbol, _CompanyData())
 
@@ -65,7 +70,8 @@ class FinancialContext:
         if result.ok:
             data.report, data.report_call = result.data, result.call_id
         else:
-            record_tool_failure(self.state, f"company report {symbol}", result.status, symbol)
+            record_tool_failure(self.state, t(self.lang, "what.company_report", sym=symbol),
+                                result.status, symbol)
         return data.report
 
     def quarters(self, symbol: str) -> list[QuarterlyFinancial] | None:
@@ -78,10 +84,11 @@ class FinancialContext:
             data.quarters = sorted(result.data or [], key=lambda q: q.date)
             data.quarter_calls = {q.date: result.call_id for q in data.quarters}
             if not data.quarters:
-                self.state.add_gap("empty_result", f"Tidak ada data kuartalan untuk {symbol}.", symbol)
+                self.state.add_gap("empty_result", t(self.lang, "gap.no_quarterly", sym=symbol),
+                                   symbol)
         else:
-            record_tool_failure(self.state, f"quarterly financials {symbol}", result.status,
-                                symbol)
+            record_tool_failure(self.state, t(self.lang, "what.quarterly", sym=symbol),
+                                result.status, symbol)
         return data.quarters
 
     def sub_sector(self, symbol: str) -> str | None:
@@ -112,15 +119,13 @@ class FinancialContext:
         if metric in data.values:
             return data.values[metric]
         spec = METRICS[metric]
+        label = spec.label_in(self.lang)
         values: list[MetricValue] = []
         if spec.banking_only:
             sub = self.sub_sector(symbol)
             if sub is not None and sub != BANKING_SUB_SECTOR:
-                self.state.add_gap(
-                    "not_applicable",
-                    f"{spec.label} hanya berlaku untuk emiten perbankan; {symbol} ({sub}) dilewati.",
-                    symbol,
-                )
+                self.state.add_gap("not_applicable", t(self.lang, "gap.not_applicable",
+                                                        label=label, sym=symbol, sub=sub), symbol)
                 data.values[metric] = values
                 return values
         if spec.source == "report_ratio":
@@ -130,9 +135,9 @@ class FinancialContext:
         else:
             values = self._quarterly_ratio(symbol, spec)
         if not values and (data.report is not None or data.quarters):
-            detail = (f"{spec.label} {symbol} tidak dapat dihitung: kuartal pembanding tahun "
-                      "sebelumnya tidak tersedia." if spec.source == "quarterly_growth"
-                      else f"{spec.label} tidak tersedia di data Sectors untuk {symbol}.")
+            key = ("gap.growth_uncomputable" if spec.source == "quarterly_growth"
+                   else "gap.metric_missing")
+            detail = t(self.lang, key, label=label, sym=symbol)
             self.state.add_gap("missing_metric", detail, symbol)
         data.values[metric] = values
         return values
@@ -151,9 +156,8 @@ class FinancialContext:
             period = str(entry.year)
             note = None
             if converted:
-                note = f"dinormalisasi dari persen ({raw}) ke rasio"
-                msg = (f"Rasio {symbol} dari company report tercatat dalam satuan persen "
-                       "dan dinormalisasi ke pecahan sebelum dibandingkan.")
+                note = t(self.lang, "note.normalized", raw=raw)
+                msg = t(self.lang, "assumption.normalized", sym=symbol)
                 normalizations = self.state.analytics.setdefault("unit_normalizations", [])
                 if msg not in normalizations:
                     normalizations.append(msg)
@@ -182,12 +186,8 @@ class FinancialContext:
             return
         for row in rows:
             if row.financials_sector_metrics is None:
-                self.state.add_gap(
-                    "incomplete_response",
-                    f"Laporan {symbol} {quarter_label(row.date)} tidak memuat "
-                    "financials_sector_metrics; metrik terkait tidak dihitung untuk periode itu.",
-                    symbol,
-                )
+                self.state.add_gap("incomplete_response", t(
+                    self.lang, "gap.incomplete", sym=symbol, quarter=quarter_label(row.date)), symbol)
 
     def _quarterly_growth(self, symbol: str, spec: MetricSpec) -> list[MetricValue]:
         rows = self.quarters(symbol)
@@ -251,19 +251,22 @@ class FinancialContext:
             period=computed.period, field_="financials.yoy_quarter_earnings_growth",
             value=reported, unit="pct_change",
             source_ref=f"fetch-company-report {symbol} financials.yoy_quarter_earnings_growth",
-            note="periode diasumsikan kuartal terakhir yang tersedia",
+            note=t(self.lang, "note.assumed_latest"),
         )
         if abs(reported - computed.value) > CONFLICT_TOLERANCE:
             self.state.conflicts.append(Conflict(
                 symbol=symbol, metric="earnings_growth_yoy", period=computed.period,
                 values={"calculated": computed.value, ev: reported},
-                detail=(f"Pertumbuhan laba YoY {symbol} {quarter_label(computed.period)}: "
-                        f"dihitung {computed.value * 100:.1f}% vs laporan {reported * 100:.1f}%"),
+                detail=t(self.lang, "conflict.detail",
+                         label=METRICS["earnings_growth_yoy"].label_in(self.lang), sym=symbol,
+                         quarter=quarter_label(computed.period),
+                         calc=fmt_pct(computed.value, self.lang),
+                         reported=fmt_pct(reported, self.lang)),
             ))
             self.state.recovery.append(RecoveryAction(
                 trigger="conflicting_data", target=f"earnings_growth_yoy {symbol}",
-                action="Tidak memilih salah satu nilai; klaim terkait ditahan validator",
-                outcome="Kedua nilai ditampilkan sebagai kesenjangan data",
+                action=t(self.lang, "recovery.conflict.action"),
+                outcome=t(self.lang, "recovery.conflict.outcome"),
             ))
 
     def ensure_period(self, symbol: str, period: str) -> bool:
@@ -279,8 +282,8 @@ class FinancialContext:
         found = bool(result.ok and result.data)
         self.state.recovery.append(RecoveryAction(
             trigger="missing_data", target=f"{symbol} {period}",
-            action="Re-query fetch-quarterly-financials dengan report_date",
-            outcome="Periode ditemukan" if found else "Periode tidak tersedia",
+            action=t(self.lang, "recovery.requery.action"),
+            outcome=t(self.lang, "recovery.requery.found" if found else "recovery.requery.missing"),
         ))
         if found:
             data = self._data(symbol)

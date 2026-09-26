@@ -307,10 +307,20 @@ def test_gateway_validates_tool_calls():
                                args_schema={"pick": Pick}) is None
 
 
-def test_gateway_rejects_empty_text_and_caps_calls():
+def test_gateway_rejects_empty_reply_and_caps_calls():
     llm = gateway(MockLLMProvider({"s": MockLLMProvider.text("   ")}))
-    assert llm.write("s", system="s", user="u") is None
+    assert llm.decide("s", system="s", user="u", schema=Pick) is None
+    assert llm.state.llm_calls[0].status == "invalid_structured_output"
     for _ in range(10):
-        llm.write("s", system="s", user="u")
+        llm.decide("s", system="s", user="u", schema=Pick)
     assert len(llm.state.llm_calls) == 4  # MAX_LLM_CALLS per request
     assert not llm.enabled
+
+
+def test_scrub_hides_keys_and_account_ids():
+    from idx_insight.llm.errors import scrub
+
+    text = scrub("bad key sk-live-123 for organization org_01abcdefgh12 on tokens per minute",
+                 "sk-live-123")
+    assert "sk-live-123" not in text and "org_01abcdefgh12" not in text
+    assert "org_***" in text and "tokens per minute" in text
