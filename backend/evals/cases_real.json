@@ -1,0 +1,48 @@
+[
+  {
+    "id": "real_discovery_banks_id",
+    "query": "Apa saja disclosure yang perlu saya pantau minggu depan untuk sektor perbankan?",
+    "expect": {"intent": "discovery", "language": "id", "status_in": ["completed", "partial"],
+               "min_relevant_events": 1, "min_research": 1, "min_accepted_claims": 1}
+  },
+  {
+    "id": "real_discovery_banks_en",
+    "query": "Which banking disclosures should I watch next week?",
+    "expect": {"intent": "discovery", "language": "en", "status_in": ["completed", "partial"],
+               "min_relevant_events": 1, "min_research": 1}
+  },
+  {
+    "id": "real_peer_profitability_id",
+    "query": "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi profitability",
+    "expect": {"intent": "peer_comparison", "language": "id",
+               "status_in": ["completed", "partial"], "peer_sufficient": ["roa", "roe"],
+               "min_accepted_claims": 4}
+  },
+  {
+    "id": "real_peer_npl",
+    "query": "Bandingkan NPL BBCA, BBRI, BMRI dan BBNI",
+    "expect": {"intent": "peer_comparison", "peer_sufficient": ["npl_ratio"]}
+  },
+  {
+    "id": "real_company_context",
+    "query": "Bagaimana kinerja BBCA?",
+    "expect": {"intent": "company_context", "companies": ["BBCA"],
+               "status_in": ["completed", "partial"], "min_accepted_claims": 2}
+  },
+  {
+    "id": "real_advice_en",
+    "query": "Is BBCA worth buying?",
+    "expect": {"language": "en", "advice_requested": true, "min_accepted_claims": 2}
+  },
+  {
+    "id": "real_watchlist",
+    "query": "Disclosure BBRI dan BBNI minggu depan",
+    "expect": {"intent": "discovery", "companies": ["BBRI", "BBNI"],
+               "events_only_for": ["BBRI", "BBNI"], "status_in": ["completed", "partial"]}
+  },
+  {
+    "id": "real_ambiguous",
+    "query": "Disclosure bank syariah minggu depan",
+    "expect": {"status_in": ["needs_clarification"]}
+  }
+]

@@ -1,7 +1,8 @@
 """Evaluation harness: run the agent on fixed cases and check expected behaviour.
 
-    python -m evals.run_eval              # rules-only, mock Sectors (deterministic)
-    python -m evals.run_eval --live       # use LLM_PROVIDER / keys from the environment or .env
+    python -m evals.run_eval                         # rules-only, mock Sectors (deterministic)
+    python -m evals.run_eval --live                  # + LLM from the environment / .env
+    python -m evals.run_eval --cases real --live     # real Sectors (SECTORS_DATA_MODE=real)
 
 Sectors data follows SECTORS_DATA_MODE, so the same cases can be re-run once the
 real Sectors adapter exists. Checks cover decisions and guardrails, not wording.
@@ -26,6 +27,8 @@ from idx_insight.llm import build_llm_provider
 from idx_insight.sectors import build_adapter
 
 CASES_FILE = pathlib.Path(__file__).with_name("cases.json")
+# Structural expectations only: real data changes, so no fixed values are asserted.
+REAL_CASES_FILE = pathlib.Path(__file__).with_name("cases_real.json")
 DEFAULT_AS_OF = date(2026, 9, 26)  # the date the mock fixtures are built around
 
 
@@ -78,6 +81,10 @@ def check(state: AgentState, expect: dict) -> list[str]:
     if len(state.duplicate_events) < expect.get("min_duplicates", 0):
         fail("duplicates not detected")
     research = {d.symbol for d in state.second_hop if d.decision == "research"}
+    if len(research) < expect.get("min_research", 0):
+        fail(f"only {len(research)} companies researched in second-hop")
+    if len(state.validation.accepted) < expect.get("min_accepted_claims", 0):
+        fail(f"only {len(state.validation.accepted)} accepted claims")
     if missing := set(expect.get("must_research", [])) - research:
         fail(f"second-hop missed {sorted(missing)}")
     if "max_research" in expect and len(research) > expect["max_research"]:
@@ -88,6 +95,9 @@ def check(state: AgentState, expect: dict) -> list[str]:
     peers = state.analytics.get("peer_comparison", {})
     if missing := set(expect.get("peer_metrics", [])) - set(peers):
         fail(f"peer metrics missing {sorted(missing)}")
+    for metric in expect.get("peer_sufficient", []):
+        if not peers.get(metric, {}).get("sufficient"):
+            fail(f"{metric}: no comparable values for at least two companies")
     for metric, period in expect.get("peer_periods", {}).items():
         if peers.get(metric, {}).get("period") != period:
             fail(f"{metric} compared on {peers.get(metric, {}).get('period')}, expected {period}")
@@ -142,7 +152,10 @@ def run_cases(agent: InsightAgent, as_of: date = DEFAULT_AS_OF,
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--live", action="store_true", help="use the configured LLM provider")
-    parser.add_argument("--as-of", type=date.fromisoformat, default=DEFAULT_AS_OF)
+    parser.add_argument("--cases", choices=["mock", "real"], default="mock",
+                        help="mock fixtures (default) or structural cases for real data")
+    parser.add_argument("--as-of", type=date.fromisoformat, default=None,
+                        help="reference date (mock default 2026-09-26, real default today)")
     parser.add_argument("--pause", type=float, default=0.0,
                         help="seconds to wait between cases (free-tier rate limits)")
     args = parser.parse_args(argv)
@@ -151,13 +164,18 @@ def main(argv: list[str] | None = None) -> int:
     settings = Settings.from_env()
     if not args.live:
         settings = settings.model_copy(update={"llm_provider": "none"})
-    agent = InsightAgent(build_adapter(settings), llm=build_llm_provider(settings),
-                         settings=settings)
+    adapter = build_adapter(settings)
+    agent = InsightAgent(adapter, llm=build_llm_provider(settings), settings=settings)
+    real = args.cases == "real"
+    as_of = args.as_of or (date.today() if real else DEFAULT_AS_OF)
+    ledger = getattr(getattr(adapter, "client", None), "ledger", None)
+    credits_before = ledger.total if ledger else 0
     model = f" ({settings.llm_model})" if settings.llm_provider != "none" else ""
     print(f"Sectors: {settings.sectors_data_mode} | LLM: {settings.llm_provider}{model} "
-          f"| as_of: {args.as_of}\n")
+          f"| cases: {args.cases} | as_of: {as_of}\n")
 
-    results = run_cases(agent, args.as_of, pause=args.pause)
+    results = run_cases(agent, as_of, REAL_CASES_FILE if real else CASES_FILE,
+                        pause=args.pause)
     for r in results:
         mark = "PASS" if r.passed else "FAIL"
         print(f"{mark}  {r.case_id:28s} tools={r.tool_calls:2d} llm={r.llm_calls} "
@@ -166,6 +184,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"      - {failure}")
     passed = sum(r.passed for r in results)
     print(f"\n{passed}/{len(results)} cases passed")
+    if ledger:
+        print(f"Sectors credits used by this run: {ledger.total - credits_before} "
+              f"(ledger total {ledger.total}, today {ledger.today()})")
     return 0 if passed == len(results) else 1
 
 
