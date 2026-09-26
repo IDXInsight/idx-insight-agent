@@ -88,9 +88,9 @@ def test_requested_unavailable_period_is_reported(run):
 
 
 def test_unsupported_metric_is_not_estimated(run):
-    state = run("Bandingkan NPL BBCA dan BBRI")
+    state = run("Bandingkan BOPO BBCA dan BBRI")
     assert any(g.kind == "unsupported_metric" for g in state.data_gaps)
-    assert not any("npl" in (c.metric or "") for c in state.claims)
+    assert not any("bopo" in (c.metric or "") for c in state.claims)
 
 
 def test_banking_metric_not_applied_to_non_bank(run):
@@ -110,3 +110,38 @@ def test_company_context_run(run):
     trend = [c for c in state.claims if c.meta.get("section") == "trend"]
     assert any("vs" in c.statement for c in trend)
     assert state.validation.status in ("passed", "partial")
+
+
+def test_npl_ratio_uses_one_screener_call_for_all_banks(run):
+    state = run("Bandingkan NPL BBCA, BBRI, BMRI dan BBNI")
+    npl = comparison(state, "npl_ratio")
+    assert npl["sufficient"] and npl["period"] == "2025"
+    assert npl["highest"] == "BBRI" and npl["lowest"] == "BMRI"
+    assert npl["values"]["BBRI"] == pytest.approx(42.9 / 1430)
+    screener = [c for c in state.tool_calls if c.tool == "company-screener"]
+    assert len(screener) == 1
+    assert screener[0].args["fields"] == ["non_performing_loan[2025]", "gross_loan[2025]"]
+    # No paid company reports are needed for NPL alone.
+    assert not any(c.tool == "fetch-company-report" for c in state.tool_calls)
+    claim = next(c for c in state.claims if c.metric == "npl_ratio" and c.symbols == ["BBRI"])
+    assert set(claim.input_evidence) == {"numerator", "denominator"}
+
+
+def test_npl_missing_for_a_company_is_a_gap(run):
+    state = run("Bandingkan NPL BBCA dan BTPS")
+    assert any(g.kind == "missing_metric" and g.symbol == "BTPS" for g in state.data_gaps)
+    assert not comparison(state, "npl_ratio")["sufficient"]
+
+
+def test_asset_quality_bundle_maps_to_npl(run):
+    state = run("Bandingkan kualitas aset BBCA dan BBRI")
+    assert "npl_ratio" in state.analytics["peer_comparison"]
+
+
+def test_banking_check_accepts_display_names_from_real_reports():
+    # Found in the first real-data evaluation: reports say "Banks", lists say "banks".
+    from idx_insight.agent.financials import sub_sector_slug
+
+    assert sub_sector_slug("Banks") == "banks"
+    assert sub_sector_slug(" Oil, Gas & Coal ") == "oil-gas-coal"
+    assert sub_sector_slug("banks") == "banks"

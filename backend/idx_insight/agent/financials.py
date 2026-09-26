@@ -26,6 +26,11 @@ CONFLICT_TOLERANCE = 0.01  # 1 percentage point
 BANKING_SUB_SECTOR = "banks"
 
 
+def sub_sector_slug(name: str) -> str:
+    """Company reports use display names ("Banks"); lists use slugs ("banks")."""
+    return "-".join(name.strip().lower().replace("&", " ").replace(",", " ").split())
+
+
 @dataclass
 class _CompanyData:
     report: CompanyReport | None = None
@@ -56,6 +61,8 @@ class FinancialContext:
         # Sub-sectors already known (e.g. from the sector's company list); lets the
         # agent skip the paid ``overview`` report section.
         self.known_sub_sectors: dict[str, str] = {}
+        # (metric, year) -> (call id, {symbol: {field: value}}) from one screener call.
+        self._screener: dict[tuple[str, str], tuple[str, dict[str, dict[str, float]]]] = {}
 
     # -- loading ---------------------------------------------------------------
 
@@ -131,9 +138,11 @@ class FinancialContext:
         spec = METRICS[metric]
         label = spec.label_in(self.lang)
         values: list[MetricValue] = []
-        if spec.banking_only:
+        # Screener metrics need no sub-sector check: a missing value simply omits the
+        # company, and skipping the check avoids the paid ``overview`` section.
+        if spec.banking_only and spec.source != "screener_ratio":
             sub = self.sub_sector(symbol)
-            if sub is not None and sub != BANKING_SUB_SECTOR:
+            if sub is not None and sub_sector_slug(sub) != BANKING_SUB_SECTOR:
                 self.state.add_gap("not_applicable", t(self.lang, "gap.not_applicable",
                                                         label=label, sym=symbol, sub=sub), symbol)
                 data.values[metric] = values
@@ -142,15 +151,63 @@ class FinancialContext:
             values = self._report_ratio(symbol, spec)
         elif spec.source == "quarterly_growth":
             values = self._quarterly_growth(symbol, spec)
+        elif spec.source == "screener_ratio":
+            values = self._screener_ratio(symbol, spec)
         else:
             values = self._quarterly_ratio(symbol, spec)
-        if not values and (data.report is not None or data.quarters):
+        fetched = data.report is not None or data.quarters or spec.source == "screener_ratio"
+        if not values and fetched:
             key = ("gap.growth_uncomputable" if spec.source == "quarterly_growth"
                    else "gap.metric_missing")
             detail = t(self.lang, key, label=label, sym=symbol)
             self.state.add_gap("missing_metric", detail, symbol)
         data.values[metric] = values
         return values
+
+    def screener_year(self) -> str:
+        """Latest full financial year, unless the user asked for a specific year."""
+        requested = self.state.timeframe.financial_period if self.state.timeframe else None
+        if requested and len(requested) == 4:
+            return requested
+        return str(self.state.as_of.year - 1)
+
+    def prefetch_screener(self, symbols: list[str], metric: str) -> None:
+        """One screener call for every company (1 credit), instead of one per company."""
+        spec = METRICS[metric]
+        year = self.screener_year()
+        if (metric, year) in self._screener or not symbols:
+            return
+        num, den = spec.path  # type: ignore[misc]
+        fields = [f"{num}[{year}]", f"{den}[{year}]"]
+        result = self.service.company_metrics(sorted(set(symbols)), fields)
+        if result.ok and result.data is not None:
+            self._screener[(metric, year)] = (result.call_id, result.data)
+        else:
+            self._screener[(metric, year)] = ("", {})
+            record_tool_failure(self.state, t(self.lang, "what.screener"), result.status)
+
+    def _screener_ratio(self, symbol: str, spec: MetricSpec) -> list[MetricValue]:
+        year = self.screener_year()
+        if (spec.name, year) not in self._screener:
+            self.prefetch_screener([symbol], spec.name)
+        call_id, rows = self._screener[(spec.name, year)]
+        row = rows.get(symbol)
+        if not row:
+            return []
+        num, den = spec.path  # type: ignore[misc]
+        num_field, den_field = f"{num}[{year}]", f"{den}[{year}]"
+        num_ev = self._evidence(call_id=call_id, tool="company-screener", symbol=symbol,
+                                period=year, field_=num_field, value=row[num_field], unit="IDR",
+                                source_ref=f"company-screener {symbol} {num_field}")
+        den_ev = self._evidence(call_id=call_id, tool="company-screener", symbol=symbol,
+                                period=year, field_=den_field, value=row[den_field], unit="IDR",
+                                source_ref=f"company-screener {symbol} {den_field}")
+        value = safe_div(row[num_field], row[den_field])
+        if value is None:
+            return []
+        return [MetricValue(symbol=symbol, metric=spec.name, period=year, value=value,
+                            unit="ratio", evidence_ids=[num_ev, den_ev], derived=True,
+                            inputs={"numerator": num_ev, "denominator": den_ev})]
 
     def _report_ratio(self, symbol: str, spec: MetricSpec) -> list[MetricValue]:
         report = self.report(symbol)
