@@ -72,17 +72,19 @@ def test_malformed_tool_call_falls_back_to_rules(run):
 
 
 def test_llm_plan_is_used_and_provider_timeout_is_survivable(run):
-    steps = ["discover_events", "rank_relevance", "validate_evidence", "synthesize"]
+    steps = ["discover_events", "rank_relevance", "second_hop_context", "validate_evidence",
+             "synthesize"]
     llm = MockLLMProvider({
-        "plan": MockLLMProvider.structured(PlanProposal(steps=steps, rationale="list only")),
+        "plan": MockLLMProvider.structured(PlanProposal(steps=steps, rationale="full")),
         "synthesis": LLMTimeoutError("gemini request timed out after 20s"),
     })
     state = run(DISCOVERY_Q, llm=llm)
     assert state.plan.source == "llm" and state.plan.names == steps
-    assert state.second_hop == []
+    # second_hop is unscripted → provider unavailable → rule-based selection
+    assert {d.source for d in state.second_hop} == {"rules"}
     assert state.briefing.synthesis_mode == "template"
     assert [(c.purpose, c.status) for c in state.llm_calls] == [
-        ("plan", "ok"), ("synthesis", "timeout")]
+        ("plan", "ok"), ("second_hop", "unavailable"), ("synthesis", "timeout")]
     assert state.status == "completed"
 
 
