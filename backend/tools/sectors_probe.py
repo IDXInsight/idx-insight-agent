@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from idx_insight.config import Settings, load_env_file
@@ -23,6 +23,7 @@ from idx_insight.sectors.http_client import SectorsHttpClient
 
 def probes(today: date) -> list[tuple[str, str, dict[str, Any]]]:
     next_monday = today + timedelta(days=7 - today.weekday())
+    utc_today = datetime.now(UTC).date()  # Sectors rejects end dates after its (UTC) today
     return [
         ("subsectors", "/v2/subsectors/", {}),
         ("screener banks + metrics", "/v2/companies/", {
@@ -33,8 +34,8 @@ def probes(today: date) -> list[tuple[str, str, dict[str, Any]]]:
             "type": "agm,dividend,stock_split", "start": next_monday.isoformat(),
             "end": (next_monday + timedelta(days=6)).isoformat()}),
         ("filings banks", "/v2/filings/", {
-            "sub_sector": "banks", "start": (today - timedelta(days=14)).isoformat(),
-            "end": today.isoformat(), "limit": 30}),
+            "sub_sector": "banks", "start": (utc_today - timedelta(days=14)).isoformat(),
+            "end": utc_today.isoformat(), "limit": 30}),
         ("company report financials", "/v2/company/report/BBCA/", {"sections": "financials"}),
         ("quarterly financials latest", "/v2/financials/quarterly/BBCA/", {"n_quarters": 1}),
     ]
