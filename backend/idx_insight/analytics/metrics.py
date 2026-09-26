@@ -1,0 +1,71 @@
+"""Metric catalog: what we can compute, from which documented Sectors fields.
+
+Only metrics traceable to documented Sectors fields are listed. Anything else
+(e.g. NPL) is reported as unsupported rather than estimated.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
+Source = Literal["report_ratio", "quarterly_growth", "quarterly_ratio"]
+
+
+@dataclass(frozen=True)
+class MetricSpec:
+    name: str
+    label: str
+    source: Source
+    # report_ratio: "<category>.<field>" in historical_financial_ratio
+    # quarterly_growth: quarterly field whose YoY change is computed
+    # quarterly_ratio: (numerator field, denominator field)
+    path: str | tuple[str, str]
+    banking_only: bool = False
+
+
+METRICS: dict[str, MetricSpec] = {
+    m.name: m
+    for m in [
+        MetricSpec("roa", "ROA", "report_ratio", "profitability.roa"),
+        MetricSpec("roe", "ROE", "report_ratio", "profitability.roe"),
+        MetricSpec("net_interest_margin", "NIM", "report_ratio",
+                   "profitability.net_interest_margin", banking_only=True),
+        MetricSpec("cost_to_income_ratio", "Cost-to-income", "report_ratio",
+                   "profitability.cost_to_income_ratio", banking_only=True),
+        MetricSpec("casa_ratio", "CASA", "report_ratio", "liquidity.casa_ratio",
+                   banking_only=True),
+        MetricSpec("loan_to_deposit_ratio", "LDR", "report_ratio",
+                   "liquidity.loan_to_deposit_ratio", banking_only=True),
+        MetricSpec("capital_adequacy_ratio", "CAR", "report_ratio",
+                   "capital.capital_adequacy_ratio", banking_only=True),
+        MetricSpec("earnings_growth_yoy", "Pertumbuhan laba YoY", "quarterly_growth", "earnings"),
+        MetricSpec("revenue_growth_yoy", "Pertumbuhan pendapatan YoY", "quarterly_growth",
+                   "revenue"),
+        MetricSpec("nii_growth_yoy", "Pertumbuhan NII YoY", "quarterly_growth",
+                   "financials_sector_metrics.net_interest_income", banking_only=True),
+        MetricSpec("loan_growth_yoy", "Pertumbuhan kredit YoY", "quarterly_growth",
+                   "financials_sector_metrics.gross_loan", banking_only=True),
+        MetricSpec("ldr_quarterly", "LDR kuartalan (kredit/DPK)", "quarterly_ratio",
+                   ("financials_sector_metrics.gross_loan",
+                    "financials_sector_metrics.total_deposit"), banking_only=True),
+    ]
+}
+
+BUNDLES: dict[str, list[str]] = {
+    "profitability": ["roa", "roe", "net_interest_margin", "earnings_growth_yoy"],
+    "efficiency": ["cost_to_income_ratio"],
+    "liquidity": ["loan_to_deposit_ratio", "casa_ratio", "ldr_quarterly"],
+    "capital": ["capital_adequacy_ratio"],
+    "growth": ["earnings_growth_yoy", "nii_growth_yoy", "loan_growth_yoy"],
+}
+
+# Metrics people ask for that Sectors does not document. Reported, never guessed.
+KNOWN_UNSUPPORTED: dict[str, str] = {
+    "npl": "Non-performing loan (NPL)",
+    "bopo": "BOPO",
+    "nsfr": "NSFR",
+}
+
+# Second-hop context bundle used after an event is judged relevant.
+EVENT_CONTEXT_METRICS = ["earnings_growth_yoy", "roe"]
