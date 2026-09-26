@@ -54,6 +54,8 @@ class MetricValue(BaseModel):
     unit: Literal["ratio", "IDR", "pct_change"]
     evidence_ids: list[str]
     derived: bool = False
+    # For derived values: input name -> evidence id (e.g. {"current": "ev-004"}).
+    inputs: dict[str, str] = {}
     note: str | None = None
 
 
