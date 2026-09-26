@@ -8,13 +8,15 @@ from __future__ import annotations
 import os
 from typing import Literal, Mapping
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 DataMode = Literal["mock", "real"]
 LLMProvider = Literal["offline", "anthropic"]
 
 
 class Settings(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     sectors_data_mode: DataMode = "mock"
     sectors_api_key: SecretStr | None = None
     llm_provider: LLMProvider = "offline"
