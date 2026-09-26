@@ -17,7 +17,9 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 | Deterministic analytics, evidence validation and sufficiency assessment | Implemented |
 | FastAPI backend | Implemented |
 | Sectors data | **Mock only** — real MCP/REST adapter is Phase 4 |
-| Runtime LLM | Provider-agnostic interface; Gemini and Groq providers implemented and unit-tested against recorded HTTP shapes, **not yet exercised against the live APIs**; default is rules-only (no LLM) |
+| Runtime LLM | Provider-agnostic interface with Gemini and Groq providers; default is rules-only (no LLM). Groq (`openai/gpt-oss-120b`) verified live on all LLM paths (evaluation 16/16 on 2026-09-27); Gemini verified live for synthesis only (other calls hit 503/429 during testing) |
+| Languages | Indonesian and English, following the user's language |
+| Evaluation | 16 cases, runnable offline and against a live LLM |
 | Final LLM provider/model | **Not decided** |
 | Frontend (Next.js) | Not started — Phase 5 |
 | Deployment (Vercel) | Not started — Phase 5/6 |
@@ -49,6 +51,8 @@ it matters using relevant contextual data.
 
 The agent makes explicit, recorded decisions at each step:
 
+0. **Detect the language** of the question (Indonesian or English); the whole
+   briefing, including numbers (`23,5%` vs `23.5%`), follows it.
 1. **Resolve** companies (tickers, aliases and watchlist, verified against
    Sectors with a bounded number of calls), sector, timeframe and intent.
    Ambiguous companies trigger a clarification question instead of a guess;
@@ -61,21 +65,26 @@ The agent makes explicit, recorded decisions at each step:
    events with evidence, and remove duplicates.
 4. **Rank relevance** with deterministic rules (ownership-change size,
    transaction value, insider trades, dividend/AGM dates, event clusters, watchlist).
-5. **Decide second-hop research**: the LLM is offered a
-   `request_financial_context` tool listing the relevant events and calls it
-   for the events whose significance needs financial context. Code enforces the
-   guards (only listed events, per-request company cap, remaining tool budget,
-   reuse). Without an LLM, a score threshold decides. A discovery plan always
-   contains this step unless the user explicitly asks for a plain list. Every decision is recorded
-   with its reason and source (`llm` or `rules`).
+5. **Decide second-hop research** (hybrid): the two most material events are
+   always researched; the LLM may add others through a
+   `request_financial_context` tool call, choosing a fixed reason category
+   (`dividend_capacity`, `ownership_shift`, `governance_decision`,
+   `corporate_action_context`). Code enforces the guards (only listed events,
+   per-request company cap, remaining tool budget, reuse). Without an LLM, a
+   score threshold decides. Discovery and company-context plans always include
+   the event steps unless the user explicitly asks for a plain list. Every
+   decision is recorded with its reason, category and source (`llm` or `rules`).
 6. **Analyse** deterministically: growth, spreads, peer medians and rankings,
    outliers, period alignment and unit normalisation.
 7. **Validate evidence** for every claim, then **assess sufficiency**:
    `sufficient`, `partial` or `insufficient`, listing incomplete, conflicting,
    unavailable and malformed data separately.
-8. **Synthesise** a briefing from accepted claims only. An LLM narrative is
-   optional and is dropped if it contains advice language or numbers that are
-   not in the validated facts.
+8. **Synthesise** a briefing from accepted claims only: each finding states
+   what happened and, for events, why it matters. An optional LLM narrative
+   must cite accepted claim ids or data-gap ids in every sentence; code rejects
+   the whole narrative if a sentence cites an unknown item, uses a number that
+   is not in the items it cites, or contains advice or speculative language
+   (for example "menandakan", "signals", "will rise").
 
 Bounded recovery happens where the problem appears: at most one retry per
 Sectors call, one widened filing window when results are empty, a prior-year
@@ -216,6 +225,10 @@ The product's runtime LLM is provider-agnostic and optional.
   `llm_calls` in the API response and logged under `idx_insight.llm`.
 - **Mock mode**: `MockLLMProvider` scripts structured replies, tool calls, text
   and failures per purpose, so tests need no API key, quota or network.
+- **Observed free-tier limits during testing (2026-09-26/27, may change)**: Groq
+  returned 429 at 8,000 tokens per minute for `openai/gpt-oss-120b`; Gemini
+  returned 503 (high demand) and then 429 after a handful of calls. Rate-limited
+  calls fall back to the deterministic rules.
 
 ## Configuration
 
@@ -260,15 +273,34 @@ python -m venv .venv
 .venv/Scripts/pip install -e "backend[dev]"     # macOS/Linux: .venv/bin/pip
 cd backend
 ../.venv/Scripts/python -m pytest -q
-../.venv/Scripts/ruff check idx_insight tests
+../.venv/Scripts/ruff check idx_insight tests evals
 ```
 
-196 deterministic tests cover agent decisions (resolution, planning, discovery,
+226 deterministic tests cover agent decisions (resolution, planning, discovery,
 relevance, second-hop with and without an LLM, recovery), analytics, evidence
 validation and sufficiency, the Sectors service and mock adapter, the LLM layer
 (Gemini/Groq request and response normalisation through a fake HTTP transport,
 structured output, tool calls, error normalisation, configuration), dependency
-direction, and the API contract. No test needs an API key or network access.
+direction, bilingual output, the evaluation cases and the API contract. No test
+needs an API key or network access; tests never read a local `.env`.
+
+### Evaluation
+
+`backend/evals/cases.json` holds 16 questions (Indonesian and English) with the
+expected decisions: intent, language, status, second-hop coverage, detected
+conflicts and data gaps, plus guardrails that apply to every case (no advice or
+speculative language, evidence behind every accepted claim).
+
+```bash
+cd backend
+../.venv/Scripts/python -m evals.run_eval                    # rules-only, deterministic
+../.venv/Scripts/python -m evals.run_eval --live --pause 25  # LLM from .env, paced for free tiers
+```
+
+The data source follows `SECTORS_DATA_MODE`, so the same cases can be re-run
+once the real Sectors adapter exists (Phase 4). Latest live run (Groq,
+2026-09-27): 16/16 cases passed, 31 LLM calls without errors, 12 of 13 narratives
+accepted (one rejected for an uncited sentence and replaced by the template).
 
 Run the API locally:
 
@@ -282,15 +314,17 @@ curl -X POST localhost:8000/v1/agent/query -H "content-type: application/json" \
 ## Known Limitations
 
 - All data is mock data; nothing has been validated against the live Sectors API.
-- The Gemini and Groq providers have not been run against the live APIs; request
-  and response shapes follow the official documentation and are covered by tests
-  with recorded payloads. Groq strict structured output only works on models Groq
-  lists as supporting it.
-- Prompts have not been evaluated against real models yet.
+- Only Groq has been exercised on every LLM path against the live API; Gemini's
+  structured output and tool calling are covered by tests with recorded payloads
+  but not yet verified live. Groq strict structured output only works on models
+  Groq lists as supporting it.
+- Free-tier rate limits make back-to-back requests fall back to the rules; the
+  final provider, model and tier are not decided.
 - Entity aliases cover a small set of companies; broader name matching needs the
   real company listing (Phase 4).
 - Relevance weights and thresholds are initial heuristics and need tuning on real data.
-- Briefings are in Indonesian; the API has no authentication or rate limiting yet.
+- Only Indonesian and English are supported; the API has no authentication or
+  rate limiting yet.
 
 ## Remaining Work
 

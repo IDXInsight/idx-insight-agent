@@ -65,6 +65,7 @@ Build the core agentic reasoning and orchestration layer.
 - Second-hop decision logic
 - Agent state
 - LLM prompts
+- Bilingual output (Indonesian and English, following the user)
 - Provider-agnostic runtime LLM interface (initial candidates: Gemini, Groq)
 - Evidence reasoning
 - agent tests
@@ -131,6 +132,7 @@ Add deterministic analysis and evidence validation.
 - evidence validation
 - recovery behavior
 - edge-case tests
+- evaluation cases and harness (offline and live), to be re-run in Phase 4
 
 ### Dependencies
 Phases 1 and 2.
