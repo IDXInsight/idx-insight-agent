@@ -65,14 +65,26 @@ def rule_plan(state: AgentState) -> list[str]:
     return steps + ["validate_evidence", "synthesize"]
 
 
-def check_plan(intent: str, steps: list[str]) -> str | None:
+def required_steps(intent: str, skip_second_hop: bool = False) -> set[str]:
+    """Steps a plan must contain. Discovery must investigate why events matter
+    (second-hop) unless the user explicitly asked for a plain list; which events
+    get researched is still decided per event in the second-hop step."""
+    required = set(REQUIRED.get(intent, set()))
+    if intent == "discovery" and not skip_second_hop:
+        required.add("second_hop_context")
+    return required
+
+
+def check_plan(intent: str, steps: list[str], *, skip_second_hop: bool = False) -> str | None:
     """Return a rejection reason, or None when the plan is acceptable."""
     if intent not in ALLOWED:
         return f"intent {intent} has no executable plan"
     extra = [s for s in steps if s not in ALLOWED[intent]]
     if extra:
         return f"steps not allowed for {intent}: {extra}"
-    missing = REQUIRED[intent] - set(steps)
+    if skip_second_hop and "second_hop_context" in steps:
+        return "user asked for a plain list; second_hop_context not allowed"
+    missing = required_steps(intent, skip_second_hop) - set(steps)
     if missing:
         return f"required steps missing: {sorted(missing)}"
     if len(set(steps)) != len(steps):
@@ -98,7 +110,7 @@ def build_plan(state: AgentState, llm: AgentLLM) -> Plan:
                 f"Intent: {intent}\n"
                 f"Allowed steps (canonical order): "
                 f"{[s for s in CANONICAL_ORDER if s in ALLOWED.get(intent, set())]}\n"
-                f"Required steps: {sorted(REQUIRED.get(intent, set()))}\n"
+                f"Required steps: {sorted(required_steps(intent, state.intent.skip_second_hop))}\n"
                 f"Companies: {state.entities.symbols}\nSector: {state.entities.sub_sector}\n"
                 f"User asked for plain list only: {state.intent.skip_second_hop}\n"
                 f"Query: {state.query}"
@@ -106,7 +118,8 @@ def build_plan(state: AgentState, llm: AgentLLM) -> Plan:
             schema=PlanProposal,
         )
         if proposal is not None:
-            rejected = check_plan(intent, list(proposal.steps))
+            rejected = check_plan(intent, list(proposal.steps),
+                                  skip_second_hop=state.intent.skip_second_hop)
             if rejected is None:
                 return Plan(
                     steps=[PlanStep(name=s, reason=_REASONS[s]) for s in proposal.steps],
