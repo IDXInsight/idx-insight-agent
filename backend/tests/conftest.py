@@ -17,6 +17,14 @@ def gateway(provider: LLMProvider | None = None, state: AgentState | None = None
     return AgentLLM(provider, state or AgentState(query="q", as_of=AS_OF))
 
 
+@pytest.fixture(autouse=True)
+def _never_read_developer_env_file(monkeypatch):
+    """Tests must not pick up a developer's local .env (and its API keys)."""
+    import idx_insight.api.app as app_module
+
+    monkeypatch.setattr(app_module, "load_env_file", lambda *a, **k: [])
+
+
 @pytest.fixture
 def run():
     """Run the agent against deterministic mock data at a fixed date."""
