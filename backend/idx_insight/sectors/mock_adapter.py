@@ -11,7 +11,7 @@ agent's recovery paths:
 from __future__ import annotations
 
 import copy
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from idx_insight.sectors import mock_data
 from idx_insight.sectors.adapter import (
@@ -84,8 +84,8 @@ class MockSectorsAdapter(SectorsAdapter):
     def get_company_report(
         self, symbol: str, sections: Sequence[str] = ("overview", "financials")
     ) -> CompanyReport:
+        self._maybe_fail("get_company_report", bare_symbol(symbol))  # outages precede lookups
         bare = self._known(symbol)
-        self._maybe_fail("get_company_report", bare)
         raw = mock_data.company_report(bare)
         body = {k: v for k, v in raw.items() if k in ("symbol", "company_name") or k in sections}
         return CompanyReport.model_validate(copy.deepcopy(body))
@@ -93,8 +93,8 @@ class MockSectorsAdapter(SectorsAdapter):
     def get_quarterly_financials(
         self, symbol: str, n_quarters: int | None = None, report_date: str | None = None
     ) -> list[QuarterlyFinancial]:
+        self._maybe_fail("get_quarterly_financials", bare_symbol(symbol))  # outages precede lookups
         bare = self._known(symbol)
-        self._maybe_fail("get_quarterly_financials", bare)
         rows = sorted(mock_data.quarterly_financials(bare), key=lambda r: r["date"], reverse=True)
         if report_date is not None:
             rows = [r for r in rows if r["date"] == report_date]
@@ -103,8 +103,8 @@ class MockSectorsAdapter(SectorsAdapter):
         return [QuarterlyFinancial.model_validate(copy.deepcopy(r)) for r in rows]
 
     def get_quarterly_financial_dates(self, symbol: str) -> QuarterlyFinancialDates:
+        self._maybe_fail("get_quarterly_financial_dates", bare_symbol(symbol))  # outages precede lookups
         bare = self._known(symbol)
-        self._maybe_fail("get_quarterly_financial_dates", bare)
         dates: QuarterlyFinancialDates = {}
         for row in sorted(mock_data.quarterly_financials(bare), key=lambda r: r["date"]):
             date = row["date"]
@@ -112,8 +112,8 @@ class MockSectorsAdapter(SectorsAdapter):
         return dates
 
     def get_corporate_actions(self, symbol: str) -> CorporateActions:
+        self._maybe_fail("get_corporate_actions", bare_symbol(symbol))  # outages precede lookups
         bare = self._known(symbol)
-        self._maybe_fail("get_corporate_actions", bare)
         body = copy.deepcopy(mock_data.CORPORATE_ACTIONS.get(bare, {}))
         return CorporateActions.model_validate({"symbol": f"{bare}.JK", "corporate_actions": body})
 
@@ -129,8 +129,8 @@ class MockSectorsAdapter(SectorsAdapter):
     ) -> FilingsPage:
         if not 1 <= limit <= _MAX_FILINGS_LIMIT:
             raise ValueError(f"limit must be between 1 and {_MAX_FILINGS_LIMIT}")
+        self._maybe_fail("get_filings", bare_symbol(symbol) if symbol else sub_sector)
         bare = self._known(symbol) if symbol else None
-        self._maybe_fail("get_filings", bare or sub_sector)
 
         def keep(row: dict) -> bool:
             day = row["timestamp"][:10]
