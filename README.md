@@ -65,7 +65,8 @@ The agent makes explicit, recorded decisions at each step:
    `request_financial_context` tool listing the relevant events and calls it
    for the events whose significance needs financial context. Code enforces the
    guards (only listed events, per-request company cap, remaining tool budget,
-   reuse). Without an LLM, a score threshold decides. Every decision is recorded
+   reuse). Without an LLM, a score threshold decides. A discovery plan always
+   contains this step unless the user explicitly asks for a plain list. Every decision is recorded
    with its reason and source (`llm` or `rules`).
 6. **Analyse** deterministically: growth, spreads, peer medians and rankings,
    outliers, period alignment and unit normalisation.
@@ -218,7 +219,9 @@ The product's runtime LLM is provider-agnostic and optional.
 
 ## Configuration
 
-All settings come from environment variables (see `.env.example`):
+All settings come from environment variables (see `.env.example`). For local
+development the API also reads a `.env` file in the repository root (git-ignored);
+variables already set in the real environment always take precedence.
 
 | Variable | Purpose |
 |---|---|
@@ -260,7 +263,7 @@ cd backend
 ../.venv/Scripts/ruff check idx_insight tests
 ```
 
-192 deterministic tests cover agent decisions (resolution, planning, discovery,
+196 deterministic tests cover agent decisions (resolution, planning, discovery,
 relevance, second-hop with and without an LLM, recovery), analytics, evidence
 validation and sufficiency, the Sectors service and mock adapter, the LLM layer
 (Gemini/Groq request and response normalisation through a fake HTTP transport,
