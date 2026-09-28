@@ -23,8 +23,12 @@
       ]
     },
     "types": [
-      "@cloudflare/workers-types",
       "node"
+    ],
+    "plugins": [
+      {
+        "name": "next"
+      }
     ]
   },
   "include": [

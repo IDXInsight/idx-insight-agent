@@ -1,38 +1,15 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-const developmentPreviewMeta =
-  /<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
+// The workspace page is prerendered by `next build`; run the build before this test.
+const page = new URL("../.next/server/app/index.html", import.meta.url);
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
-}
-
-test("serves the research workspace with explicit illustrative-data disclosure", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  const html = await response.text();
+test("prerendered workspace discloses illustrative data and links no hosting template", { skip: !existsSync(page) && "run `npm run build` first" }, () => {
+  const html = readFileSync(page, "utf8");
   assert.match(html, /IDX Insight/);
   assert.match(html, /Temukan konteks/);
   assert.match(html, /Semua angka dan kejadian bersifat ilustratif/);
   assert.match(html, /Watchlist kamu/);
-  assert.doesNotMatch(html, developmentPreviewMeta);
-  assert.doesNotMatch(html, /Your site is taking shape/);
+  assert.doesNotMatch(html, /chatgpt|openai|codex/i);
 });
