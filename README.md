@@ -9,8 +9,8 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 ## Current Status
 
 **Phases 0–4 implemented: the agent runs on real Sectors data** (mock data remains
-for tests and offline development). See [PHASE.md](PHASE.md) — the project is
-currently until Phase 4.
+for tests and offline development); Phase 5 (product UI) is in progress. See
+[PHASE.md](PHASE.md) — the project is currently until Phase 5.
 
 | Area | State |
 |---|---|
@@ -22,7 +22,7 @@ currently until Phase 4.
 | Languages | Indonesian and English, following the user's language |
 | Evaluation | 17 mock cases (offline) and 8 structural real-data cases; real-data run 8/8 with Groq on 2026-09-27 |
 | Final LLM provider/model | **Not decided** |
-| Frontend (Next.js) | Not started — Phase 5 |
+| Frontend (Next.js) | In progress — workspace UI connected to the agent API through a server-side proxy; example mode when no backend is configured (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Not started — Phase 5/6 |
 
 ## Project Purpose
@@ -364,6 +364,13 @@ cd backend
 ../.venv/Scripts/python -m uvicorn idx_insight.api.app:app --reload
 curl -X POST localhost:8000/v1/agent/query -H "content-type: application/json" \
   -d '{"query": "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi profitability dan efficiency"}'
+```
+
+Run the UI against it (from `frontend/`, Node.js 22):
+
+```bash
+npm ci
+IDX_INSIGHT_API_URL=http://127.0.0.1:8000 npm run dev
 ```
 
 ## Known Limitations

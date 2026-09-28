@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**Currently until Phase 4**
+**Currently until Phase 5**
 
 This document describes the complete project roadmap.
 Future phases are documented for planning and team coordination.
@@ -14,7 +14,7 @@ Future phases are documented for planning and team coordination.
 | 2 | Backend Foundation | Implemented (mock data) |
 | 3 | Analytics & Validation | Implemented (mock data) |
 | 4 | Real Sectors Integration | Implemented |
-| 5 | Product UI | Planned |
+| 5 | Product UI | In progress |
 | 6 | End-to-End Validation | Planned |
 | 7 | Demo & Submission Preparation | Planned |
 
@@ -386,6 +386,7 @@ Next.js
 | `main` | Stable, integrated project state |
 | `agent-brain` | Intent/entity resolution, planning, discovery, relevance, second-hop decisions, evidence reasoning, LLM prompts, agent state, analytics, agent tests |
 | `backend` | FastAPI, API routes, schemas, service layer, configuration, Sectors adapters, backend tests |
+| `frontend` | Next.js UI (`frontend/`), server-side proxy to the API, frontend tests |
 
 Stable work is merged into `main` at milestones. Commits follow
 Conventional Commits (`feat(agent): …`, `fix(sectors): …`, `test(...)`, `docs(...)`).
@@ -411,6 +412,8 @@ The project must:
 
 ## Current Boundary
 
-**Currently until Phase 4.**
+**Currently until Phase 5.**
 
-Phases 5–7 are planned future development.
+Phase 5 is in progress: the Next.js workspace runs against the agent API; the
+deployment protections listed under Phase 5 are still open. Phases 6–7 are planned
+future development.

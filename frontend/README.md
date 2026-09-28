@@ -1,30 +1,60 @@
-# IDX Insight — design prototype
+# IDX Insight — frontend
 
-Interactive dark UI for the existing IDX Insight Agent. All numbers, event dates and results are synthetic design examples. No backend or market APIs are called; no credentials are required.
+Next.js (App Router) research workspace for the IDX Insight Agent: query form,
+disclosure radar, peer comparison, findings, evidence explorer and agent trace.
+Deployment target: Vercel.
 
-## Local preview
+## Modes
+
+| Mode | When | What the UI shows |
+|---|---|---|
+| **Connected** | `IDX_INSIGHT_API_URL` is set and the backend answers `/v1/capabilities` | "Jalankan riset" sends the question to the agent; results, evidence and trace come from the real response |
+| **Example** | no backend configured or reachable | the original design prototype: "Lihat contoh riset" opens synthetic example results, clearly labelled as illustrative |
+
+In connected mode, the example screens stay available from the navigation and remain
+labelled as examples; the synthetic chart is never mixed into a real result.
+
+## Local development
 
 ```sh
 npm ci
+cp .env.example .env.local        # set IDX_INSIGHT_API_URL, or leave empty for example mode
 npm run dev
 ```
 
-The dev server prints the local URL. `npm run build` creates the production build. `npx tsc --noEmit` checks TypeScript.
+Start the backend separately (see the root README). For UI work without spending
+Sectors credits, run it with `SECTORS_DATA_MODE=mock LLM_PROVIDER=none`; the UI then
+labels results as mock data.
 
-## Structure
+Checks: `npm run typecheck`, `npm run lint`, `npm run build`, `npm test` (after a build).
 
-- `app/page.tsx`: research workspace, disclosure briefing, peer comparison, company context, evidence and trace drawers.
-- `app/globals.css`: charcoal/mint design tokens and responsive layout.
-- `components/ui/v-chart-4.tsx`: the supplied Recharts line-chart pattern adapted to financial periods, selectable series, units and tooltips.
-- `components/ui/chart.tsx`: supplied shadcn chart primitives, with zero-value tooltip support corrected.
-- `components.json`: shadcn paths (`@/components/ui`) and Tailwind configuration.
+## Architecture
 
-The scaffold uses React, TypeScript, Tailwind v4 and vinext (Next.js-compatible routing) for Sites preview. The existing FastAPI backend remains separate. No configuration from the parent `.env` is used.
+- The browser never calls the backend directly. `app/api/agent/status` and
+  `app/api/agent/query` are server-side route handlers that validate input and forward
+  to FastAPI, so the backend URL stays server-side and no CORS setup is needed.
+- `lib/agent.ts` mirrors the response contract of `POST /v1/agent/query`
+  (`backend/idx_insight/api/schemas.py`) and holds the display helpers.
+- `components/live-result.tsx` renders a real response with the prototype's panels;
+  it only shows what the backend returned (accepted claims, their evidence, data gaps,
+  assumptions and the boundary note).
+- `app/page.tsx` is the workspace; `components/ui/v-chart-4.tsx` is the illustrative
+  chart used in example mode only.
 
-## Interaction scope
+## Environment variables
 
-Navigation, prompt selection, input validation, watchlist selection, event filters, chart metrics/series, and accessible detail dialogs work locally. “Lihat contoh riset” explicitly opens a synthetic example; free text is not analyzed. Watchlist and results are in memory and reset on refresh. Dates in sample results remain fixed regardless of the selected input period.
+| Variable | Scope | Purpose |
+|---|---|---|
+| `IDX_INSIGHT_API_URL` | server | FastAPI base URL; empty = example mode |
+| `AGENT_TIMEOUT_MS` | server | timeout for one agent run (default 110000) |
+| `NEXT_PUBLIC_SITE_URL` | public | absolute site URL for social preview images |
 
-## Backend integration to do
+No Sectors or LLM key is ever needed by the frontend.
 
-Connect the research form to `/v1/agent/query`, render accepted claims/evidence/status from the real response and remove synthetic results from live mode. The backend response does not currently expose the multi-year series used in the chart; add a documented data contract before displaying live historical charts. Streamed progress is not implemented. Keep API keys server-side. Show actual observation periods, request timestamps, source links and cache freshness only when available from the backend.
+## Not yet done
+
+- The UI is Indonesian only; the agent also answers in English.
+- The response has no multi-period series, so connected mode shows no historical chart.
+- Deployment protections from PHASE.md Phase 5 (per-day caps, rate limiting,
+  persistent cache and credit ledger) are not implemented yet.
+- Streamed progress while the agent runs.

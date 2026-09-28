@@ -11,6 +11,8 @@ type AnimatedWaveFooterProps = {
   onNewResearch: () => void;
   onOpenGuide: () => void;
   onOpenTrace: () => void;
+  live?: boolean;
+  dataLabel?: string;
 };
 
 const navigation: { view: ResearchView; label: string }[] = [
@@ -22,7 +24,7 @@ const navigation: { view: ResearchView; label: string }[] = [
 
 /** Shared footer, adapted from the supplied animated-wave-footer reference. */
 export default function AnimatedWaveFooter({
-  activeView, onNavigate, onNewResearch, onOpenGuide, onOpenTrace,
+  activeView, onNavigate, onNewResearch, onOpenGuide, onOpenTrace, live = false, dataLabel = "data Sectors",
 }: AnimatedWaveFooterProps) {
   const [paused, setPaused] = useState(false);
 
@@ -79,7 +81,7 @@ export default function AnimatedWaveFooter({
             <h2 id="footer-guide">Kenali workspace</h2>
             <p>Pelajari cara membaca disclosure, membandingkan bank, dan menelusuri sumber setiap temuan.</p>
             <button className="wave-footer-guide-button" onClick={onOpenGuide}><BookOpen size={14} aria-hidden="true" /> Panduan riset <ArrowRight size={13} aria-hidden="true" /></button>
-            <span className="wave-footer-demo"><span aria-hidden="true" /> Prototipe · data ilustrasi</span>
+            <span className="wave-footer-demo"><span aria-hidden="true" /> {live ? `Terhubung ke agent · ${dataLabel}` : "Prototipe · data ilustrasi"}</span>
           </section>
         </div>
 

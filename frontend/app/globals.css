@@ -121,3 +121,17 @@ button.brand { border:0; background:none; text-align:left; }
 @media (max-width: 1190px) { .wave-footer-inner { padding-left: 25px; padding-right: 25px; }.wave-footer-grid { grid-template-columns: 1.2fr 1fr; gap: 30px 36px; } }
 @media (max-width: 700px) { .wave-footer { margin-top: 30px; }.wave-footer-inner { padding: 28px 18px 0; }.wave-footer-grid { gap: 27px 22px; }.wave-footer-intro,.wave-footer-guide { grid-column: 1 / -1; }.wave-footer-intro > p { font-size: 19px; }.wave-footer-description { max-width: 350px; }.wave-footer-guide p { max-width: 400px; }.wave-footer-bottom { align-items: flex-start; flex-direction: column; gap: 9px; }.wave-footer-bottom-right { width: 100%; justify-content: space-between; } }
 @media (prefers-reduced-motion: reduce) { .wave-footer-track { animation: none; }.wave-footer-motion { display: none; } }
+
+/* Live agent results: reuse the prototype panels; only these additions are new. */
+.status-pill.warn { color:#e3c98f; background:#3a3526; border-color:#5a4f33; }
+.narrative { padding:0 22px 18px; }.narrative p { font-size:12px; line-height:1.9; color:#c2d3c8; }
+.finding-list { margin-top:14px; border-top:1px solid #303832; }
+.finding { display:flex; align-items:center; justify-content:space-between; gap:14px; width:100%; text-align:left; padding:14px 22px; border:0; border-bottom:1px solid #2c352e; background:none; font-size:11px; line-height:1.6; }
+.finding:last-child { border-bottom:0; }button.finding:hover { background:#222b24; }.finding>svg { color:#778c7e; }
+.finding strong { display:block; font-weight:400; color:#dce6df; }.finding small { display:block; margin-top:5px; font-size:10px; color:#93a89a; }
+.boundary-note { display:flex; align-items:center; gap:7px; font-size:10px; color:#8fa295; }
+.reason-list { margin:-8px 0 22px; padding-left:18px; color:#c5d8cc; font-size:11px; line-height:1.9; }
+.source-link { display:inline-flex; align-items:center; gap:4px; color:#bcdcc7; text-decoration:underline; text-underline-offset:3px; }
+.evidence-list + .evidence-list { margin-top:-10px; border-top:1px dashed #4a6352; }
+.trace-list li>span.trace-warn { border-color:#6d6140; background:#3a3526; color:#e3c98f; }
+@media(max-width:1190px) { .finding { padding-left:17px; padding-right:17px; } }
