@@ -59,8 +59,34 @@ Checks: `npm run typecheck`, `npm run lint`, `npm run build`, `npm test` (after 
 
 No Sectors or LLM key is ever needed by the frontend.
 
-## Not yet done
+## Status
 
-- The UI is Indonesian only; the agent also answers in English.
-- The response has no multi-period series, so connected mode shows no historical chart.
-- Streamed progress while the agent runs.
+Done:
+- Workspace connected to the agent API through the server-side proxy; results,
+  findings, peer table, disclosure radar, evidence explorer and agent trace come from the
+  real response
+- Example mode with clearly labelled illustrative data when no backend is configured
+- Shared secret and visitor IP sent to the backend; backend limits shown as
+  `rate_limited` or `daily_limit`
+- Security headers on every page
+- Deployed at https://idx-insight.vercel.app (Production uses the real backend)
+
+Not yet done:
+- The watchlist offers four banks (BBCA, BBRI, BMRI, BBNI); the API accepts any IDX ticker
+  (up to 20, four letters each)
+- No progress feedback while the agent runs; a new question takes 4–6 s on real data
+- The proxy always asks for Indonesian (`language: "id"`), so English questions are
+  answered in Indonesian; the UI labels are Indonesian only
+- The Vercel Firewall rate limit (10 requests per minute per IP on `/api/agent/query`)
+  answers 429 with its own body (`{"error": {"code": "429", ...}}`); the UI then shows the
+  generic backend error instead of the rate-limit message
+- The response has no multi-period series, so connected mode shows no historical chart
+- `app/page.tsx` holds most of the UI in one file; mobile layout not reviewed
+- Any external resource (fonts, images, scripts from another domain) needs a matching
+  change to the Content Security Policy in `next.config.ts`
+
+## Preview deployments
+
+Branch pushes create Preview deployments. Set `IDX_INSIGHT_API_URL` for **Production
+only** in the Vercel project, so previews run in example mode instead of calling the
+production backend with real data (which spends Sectors credits).
