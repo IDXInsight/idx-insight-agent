@@ -7,6 +7,9 @@
   to develop and rehearse with real data at zero credit cost.
 - ``cache_mode="off"``: always call the API (still capped and recorded).
 
+The cache lives in files locally (``FileResponseCache``) and in Redis on a
+deployment (``StoreResponseCache``).
+
 The API key is sent only in the ``Authorization`` header and never written to
 the cache, the ledger, logs or error messages.
 """
@@ -24,7 +27,8 @@ from typing import Any, Literal
 import httpx
 
 from idx_insight.sectors.adapter import SectorsError, SectorsNotFoundError, SectorsUnavailableError
-from idx_insight.sectors.credits import CreditLedger
+from idx_insight.sectors.credits import Ledger
+from idx_insight.storage import KeyValueStore, StorageError
 
 logger = logging.getLogger("idx_insight.sectors")
 
@@ -59,15 +63,71 @@ def _clean(params: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in sorted(params.items()) if v not in (None, "")}
 
 
+def _cache_key(path: str, params: dict[str, Any]) -> str:
+    key = json.dumps({"path": path, "params": params}, sort_keys=True, default=str)
+    return hashlib.sha1(key.encode()).hexdigest()[:16]
+
+
+class FileResponseCache:
+    """Raw responses as JSON files (local development; doubles as the local recording)."""
+
+    def __init__(self, directory: Path) -> None:
+        self.directory = directory
+
+    def _file(self, path: str, params: dict[str, Any]) -> Path:
+        folder = path.strip("/").split("/")[1] if "/" in path.strip("/") else "root"
+        return self.directory / folder / f"{_cache_key(path, params)}.json"
+
+    def get(self, path: str, params: dict[str, Any]) -> dict[str, Any] | None:
+        file = self._file(path, params)
+        return json.loads(file.read_text(encoding="utf-8")) if file.is_file() else None
+
+    def put(self, path: str, params: dict[str, Any], entry: dict[str, Any]) -> None:
+        file = self._file(path, params)
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(json.dumps(entry, indent=1), encoding="utf-8")
+
+
+class StoreResponseCache:
+    """Raw responses in the shared store (Redis on Vercel), expiring with their freshness TTL.
+
+    A store failure is treated as a cache miss; the credit ledger still guards the request.
+    """
+
+    def __init__(self, store: KeyValueStore, prefix: str = "idx:") -> None:
+        self.store = store
+        self.prefix = f"{prefix}sectors:"
+
+    def get(self, path: str, params: dict[str, Any]) -> dict[str, Any] | None:
+        try:
+            raw = self.store.get(self.prefix + _cache_key(path, params))
+        except StorageError as exc:
+            logger.warning("sectors_cache_unavailable error=%s", exc)
+            return None
+        return json.loads(raw) if raw else None
+
+    def put(self, path: str, params: dict[str, Any], entry: dict[str, Any]) -> None:
+        ttl = int(_ttl(path).total_seconds())
+        try:
+            self.store.set(self.prefix + _cache_key(path, params), json.dumps(entry), ttl)
+        except StorageError as exc:
+            logger.warning("sectors_cache_unavailable error=%s", exc)
+
+
+ResponseCache = FileResponseCache | StoreResponseCache
+
+
 class SectorsHttpClient:
-    def __init__(self, *, api_key: str, ledger: CreditLedger, cache_dir: Path | None,
-                 cache_mode: CacheMode = "readwrite", timeout: float = 20.0,
-                 client: httpx.Client | None = None, sleep=time.sleep) -> None:
+    def __init__(self, *, api_key: str, ledger: Ledger, cache_dir: Path | None = None,
+                 cache: ResponseCache | None = None, cache_mode: CacheMode = "readwrite",
+                 timeout: float = 20.0, client: httpx.Client | None = None,
+                 sleep=time.sleep) -> None:
         if not api_key and cache_mode != "replay":
             raise SectorsAuthError("SECTORS_API_KEY is not set")
         self._api_key = api_key
         self.ledger = ledger
-        self.cache_dir = cache_dir
+        self.cache = cache if cache is not None else (
+            FileResponseCache(cache_dir) if cache_dir is not None else None)
         self.cache_mode = cache_mode
         self.timeout = timeout
         self._client = client or httpx.Client(base_url=BASE_URL)
@@ -75,46 +135,55 @@ class SectorsHttpClient:
 
     # -- cache ---------------------------------------------------------------------
 
-    def _cache_file(self, path: str, params: dict[str, Any]) -> Path | None:
-        if self.cache_dir is None:
+    def _read_cache(self, path: str, params: dict[str, Any]) -> dict[str, Any] | None:
+        if self.cache is None:
             return None
-        key = json.dumps({"path": path, "params": params}, sort_keys=True, default=str)
-        digest = hashlib.sha1(key.encode()).hexdigest()[:16]
-        folder = path.strip("/").split("/")[1] if "/" in path.strip("/") else "root"
-        return self.cache_dir / folder / f"{digest}.json"
-
-    def _read_cache(self, file: Path | None, path: str) -> dict[str, Any] | None:
-        if file is None or not file.is_file():
+        entry = self.cache.get(path, params)
+        if entry is None:
             return None
-        entry = json.loads(file.read_text(encoding="utf-8"))
         fetched = datetime.fromisoformat(entry["fetched_at"])
         if self.cache_mode == "readwrite" and datetime.now() - fetched > _ttl(path):
             return None
         return entry
 
-    def _write_cache(self, file: Path | None, path: str, params: dict[str, Any], status: int,
-                     body: Any) -> None:
-        if file is None or self.cache_mode == "off":
+    def _write_cache(self, path: str, params: dict[str, Any], status: int, body: Any) -> None:
+        if self.cache is None or self.cache_mode == "off":
             return
-        file.parent.mkdir(parents=True, exist_ok=True)
-        file.write_text(json.dumps({"path": path, "params": params, "status": status,
-                                    "fetched_at": datetime.now().isoformat(timespec="seconds"),
-                                    "body": body}, indent=1), encoding="utf-8")
+        self.cache.put(path, params, {"path": path, "params": params, "status": status,
+                                      "fetched_at": datetime.now().isoformat(timespec="seconds"),
+                                      "body": body})
 
     # -- request -------------------------------------------------------------------
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         """Return the JSON body of a successful response or raise a ``SectorsError``."""
         params = _clean(params or {})
-        file = self._cache_file(path, params)
         if self.cache_mode != "off":
-            cached = self._read_cache(file, path)
+            cached = self._read_cache(path, params)
             if cached is not None:
                 return self._result(path, cached["status"], cached["body"])
             if self.cache_mode == "replay":
                 raise SectorsUnavailableError(f"replay mode: {path} is not in the local cache")
 
-        self.ledger.check(path, params)
+        reserved = self.ledger.reserve(path, params)
+        try:
+            response = self._send(path, params)
+        except BaseException:
+            self.ledger.release(reserved)
+            raise
+        status = response.status_code
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+        credits = self.ledger.settle(path, params, reserved, status, body)
+        logger.info("sectors_call path=%s status=%s credits=%s total=%s", path, status, credits,
+                    self.ledger.total)
+        if status in (200, 404):
+            self._write_cache(path, params, status, body)
+        return self._result(path, status, body)
+
+    def _send(self, path: str, params: dict[str, Any]) -> httpx.Response:
         response = None
         for delay in (*_BACKOFF_SECONDS, None):
             try:
@@ -128,19 +197,8 @@ class SectorsHttpClient:
                 break
             self.ledger.record(path, params, 429, None)
             self._sleep(delay)
-
         assert response is not None
-        status = response.status_code
-        try:
-            body = response.json()
-        except ValueError:
-            body = None
-        credits = self.ledger.record(path, params, status, body)
-        logger.info("sectors_call path=%s status=%s credits=%s total=%s", path, status, credits,
-                    self.ledger.total)
-        if status in (200, 404):
-            self._write_cache(file, path, params, status, body)
-        return self._result(path, status, body)
+        return response
 
     @staticmethod
     def _result(path: str, status: int, body: Any) -> Any:

@@ -414,6 +414,8 @@ The project must:
 
 **Currently until Phase 5.**
 
-Phase 5 is in progress: the Next.js workspace runs against the agent API; the
-deployment protections listed under Phase 5 are still open. Phases 6–7 are planned
-future development.
+Phase 5 is in progress: the Next.js workspace runs against the agent API, and the
+deployment protections listed under Phase 5 are implemented in code (shared secret
+between the Next.js proxy and FastAPI, Redis-backed credit ledger and caches, per-client
+and daily limits, answer cache). The Vercel deployment itself is still open. Phases 6–7
+are planned future development.
