@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+from idx_insight.agent.recovery import record_tool_failure
 from idx_insight.agent.state import AgentState, AmbiguousMention, Entities, ResolvedCompany
 from idx_insight.sectors.schemas import bare_symbol
 from idx_insight.sectors.service import SectorsService
@@ -125,6 +126,11 @@ class EntityResolver:
                 entities.companies[-1].company_name = result.data.company_name
             elif result.status == "not_found":
                 unknown.append(token)
+            elif result.status == "credit_cap":
+                # Not a doubtful ticker: the credit cap stopped the check. Keep it in scope so
+                # the briefing reports the cap instead of asking which company was meant.
+                add(token, token, "ticker")
+                record_tool_failure(state, token, "credit_cap", token)
             else:
                 unverified.append(token)
         entities.unknown, entities.unverified = unknown, unverified

@@ -63,9 +63,10 @@ def peer_comparison(state: AgentState, ctx: FinancialContext, symbols: list[str]
                                                           sym=sym, period=quarter_label(requested)),
                                   sym)
         alignment = align_latest_common({s: list(v) for s, v in series.items()})
+        # Re-align only when some company has a quarter at all (every fetch can fail).
         if METRICS[metric].source in ("quarterly_growth", "quarterly_ratio") and not requested and (
             not alignment.aligned or alignment.ahead
-        ):
+        ) and any(series.values()):
             # Latest quarters differ: fetch exactly the common quarter for the others.
             target = alignment.period or min(max(v) for v in series.values() if v)
             for sym, values in series.items():

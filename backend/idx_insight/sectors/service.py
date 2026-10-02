@@ -53,7 +53,9 @@ TOOL_NAMES: dict[str, str] = {
 
 DEFAULT_ALLOWLIST: frozenset[str] = frozenset(TOOL_NAMES.values())
 
-CallStatus = Literal["ok", "error", "not_found", "not_allowed", "budget_exhausted", "malformed"]
+# budget_exhausted = per-request tool-call budget; credit_cap = Sectors credit cap (day or total).
+CallStatus = Literal["ok", "error", "not_found", "not_allowed", "budget_exhausted", "credit_cap",
+                     "malformed"]
 
 
 class ToolCallRecord(BaseModel):
@@ -134,8 +136,8 @@ class SectorsService:
             except SectorsCreditCapError as exc:
                 # Refused locally before sending: nothing was spent, do not retry.
                 record.attempts -= 1
-                record.status, record.error = "budget_exhausted", str(exc)
-                return ToolResult(call_id, tool, "budget_exhausted", error=str(exc))
+                record.status, record.error = "credit_cap", str(exc)
+                return ToolResult(call_id, tool, "credit_cap", error=str(exc))
             except SectorsNotFoundError as exc:
                 record.status, record.error = "not_found", str(exc)
                 result: ToolResult[T] = ToolResult(call_id, tool, "not_found", error=str(exc))
