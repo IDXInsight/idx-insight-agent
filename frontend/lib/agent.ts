@@ -2,6 +2,7 @@
  * Types and display helpers for the IDX Insight Agent API (`POST /v1/agent/query`).
  * Mirrors `backend/idx_insight/api/schemas.py`; only the fields the UI renders are typed.
  */
+import { type Lang, monthLabels, numberLocale } from "./i18n.ts";
 
 export type EvidenceItem = {
   evidence_id: string;
@@ -90,8 +91,11 @@ export type AgentResponse = {
 /** Which direction of a metric is usually read as favourable; null = no single direction. */
 export type MetricDirection = "higher" | "lower" | null;
 
+/** Metric labels in both languages and its direction, from `GET /v1/capabilities`. */
+export type MetricInfo = { id: string; en: string; direction: MetricDirection };
+
 export type AgentStatus =
-  | { live: true; dataSource: string; llmProvider: string; metrics: Record<string, string>; directions: Record<string, MetricDirection> }
+  | { live: true; dataSource: string; llmProvider: string; metrics: Record<string, MetricInfo> }
   | { live: false };
 
 export type ResultView = "discovery" | "peers" | "company";
@@ -103,19 +107,9 @@ export function viewForIntent(intent: string | null, fallback: ResultView): Resu
   return fallback;
 }
 
-export const eventTypeLabels: Record<AgentEvent["event_type"], string> = {
-  ownership_change: "Kepemilikan",
-  agm: "RUPS",
-  dividend_ex: "Dividen",
-  dividend_payment: "Dividen",
-  stock_split: "Stock split",
-};
-
-const months = ["JAN", "FEB", "MAR", "APR", "MEI", "JUN", "JUL", "AGU", "SEP", "OKT", "NOV", "DES"];
-
-export function dayMonth(isoDate: string): { day: string; month: string } {
+export function dayMonth(isoDate: string, lang: Lang = "id"): { day: string; month: string } {
   const [, m, d] = isoDate.split("-");
-  const month = months[Number(m) - 1];
+  const month = monthLabels[lang][Number(m) - 1];
   return month && d ? { day: d.slice(0, 2), month } : { day: "—", month: isoDate };
 }
 
@@ -127,18 +121,18 @@ export function periodLabel(period: string | null | undefined): string {
   return `Q${["03-31", "06-30", "09-30", "12-31"].indexOf(match[2]) + 1} ${match[1]}`;
 }
 
-export function formatPercent(fraction: number): string {
-  return `${(fraction * 100).toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+export function formatPercent(fraction: number, lang: Lang = "id"): string {
+  return `${(fraction * 100).toLocaleString(numberLocale[lang], { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
 
 /** Formats an evidence value by its unit; ratios and changes are stored as fractions. */
-export function formatEvidenceValue(item: EvidenceItem): string {
+export function formatEvidenceValue(item: EvidenceItem, lang: Lang = "id"): string {
   const { value, unit } = item;
   if (value === null) return "—";
   if (typeof value === "string") return value;
-  if (unit === "ratio" || unit === "pct_change") return formatPercent(value);
-  if (unit === "IDR") return `Rp${value.toLocaleString("id-ID")}`;
-  return value.toLocaleString("id-ID");
+  if (unit === "ratio" || unit === "pct_change") return formatPercent(value, lang);
+  if (unit === "IDR") return `Rp${value.toLocaleString(numberLocale[lang])}`;
+  return value.toLocaleString(numberLocale[lang]);
 }
 
 export function isUrl(value: string): boolean {

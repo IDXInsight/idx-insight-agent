@@ -1,5 +1,5 @@
 import { backendFetch, backendUrl } from "@/lib/backend";
-import type { AgentStatus, MetricDirection } from "@/lib/agent";
+import type { AgentStatus, MetricInfo } from "@/lib/agent";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +12,13 @@ export async function GET(): Promise<Response> {
     const caps = (await response.json()) as {
       data_mode: string;
       llm_provider: string;
-      metrics: Record<string, { id: string; en: string; direction?: MetricDirection }>;
+      metrics: Record<string, Partial<MetricInfo>>;
     };
-    const metrics = Object.fromEntries(Object.entries(caps.metrics).map(([key, label]) => [key, label.id]));
-    const directions = Object.fromEntries(Object.entries(caps.metrics).map(([key, label]) => [key, label.direction ?? null]));
+    const metrics = Object.fromEntries(Object.entries(caps.metrics).map(([key, m]) => [key, {
+      id: m.id ?? key, en: m.en ?? m.id ?? key, direction: m.direction ?? null,
+    } satisfies MetricInfo]));
     return Response.json({
-      live: true, dataSource: caps.data_mode, llmProvider: caps.llm_provider, metrics, directions,
+      live: true, dataSource: caps.data_mode, llmProvider: caps.llm_provider, metrics,
     } satisfies AgentStatus);
   } catch {
     return Response.json({ live: false } satisfies AgentStatus);
