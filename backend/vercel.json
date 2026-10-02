@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "idx_insight/api/app.py": {
+      "maxDuration": 120,
+      "excludeFiles": "{.sectors_local/**,tests/**,evals/**,tools/**}"
+    }
+  }
+}

@@ -19,6 +19,10 @@ dev = ["pytest>=8", "uvicorn>=0.30", "ruff>=0.6"]
 [tool.setuptools.packages.find]
 include = ["idx_insight*"]
 
+# Vercel (project Root Directory = backend): the FastAPI app becomes one function.
+[tool.vercel]
+entrypoint = "idx_insight.api.app:app"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

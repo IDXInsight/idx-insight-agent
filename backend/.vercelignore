@@ -1,0 +1,12 @@
+# Never upload real Sectors data (recordings, cache, ledger) or development files,
+# even when deploying from a local checkout with the Vercel CLI.
+.sectors_local/
+tests/
+evals/
+tools/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+__pycache__/
+.env
+.env.*
