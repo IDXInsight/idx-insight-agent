@@ -242,6 +242,17 @@ Phase 2 API contract (Phase 4 for real data).
 A user can run discovery and peer-analysis queries end-to-end in the
 Next.js UI and inspect evidence and the execution trace.
 
+### Progress (2026-10-02)
+- Deployed on Vercel from `main`: https://idx-insight.vercel.app (frontend) and
+  `idx-insight-api` (FastAPI backend), real Sectors data and Groq in Production,
+  mock data and no LLM in Preview
+- Deployment protections in place: shared secret between the Next.js proxy and FastAPI,
+  Upstash Redis for the credit ledger, Sectors cache, answer cache and usage counters,
+  per-client and daily limits, daily LLM cap with rules fallback, security headers
+- Verified on the deployment with two real-data questions (9 credits)
+- Still open: free-ticker watchlist (the UI offers four banks), progress while the agent
+  runs, an Indonesian/English toggle (the proxy always asks for Indonesian)
+
 ---
 
 ## Phase 6 — End-to-End Validation
@@ -414,8 +425,6 @@ The project must:
 
 **Currently until Phase 5.**
 
-Phase 5 is in progress: the Next.js workspace runs against the agent API, and the
-deployment protections listed under Phase 5 are implemented in code (shared secret
-between the Next.js proxy and FastAPI, Redis-backed credit ledger and caches, per-client
-and daily limits, answer cache). The Vercel deployment itself is still open. Phases 6–7
-are planned future development.
+Phase 5 is in progress: the product is deployed on Vercel with the deployment
+protections listed under Phase 5 (see Phase 5 → Progress); the remaining work is the UI
+items listed there. Phases 6–7 are planned future development.

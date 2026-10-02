@@ -12,6 +12,9 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 for tests and offline development); Phase 5 (product UI) is in progress. See
 [PHASE.md](PHASE.md) — the project is currently until Phase 5.
 
+**Live:** https://idx-insight.vercel.app (real Sectors data, Groq `openai/gpt-oss-120b`).
+Every new question spends Sectors credits; repeated questions are answered from a cache.
+
 | Area | State |
 |---|---|
 | Agent Brain (resolution, planning, discovery, relevance, second-hop) | Implemented |
@@ -23,7 +26,7 @@ for tests and offline development); Phase 5 (product UI) is in progress. See
 | Evaluation | 17 mock cases (offline) and 8 structural real-data cases; real-data run 8/8 with Groq on 2026-09-27 |
 | Final LLM provider/model | **Not decided** |
 | Frontend (Next.js) | In progress — workspace UI connected to the agent API through a server-side proxy; example mode when no backend is configured (see [frontend/README.md](frontend/README.md)) |
-| Deployment (Vercel) | Code ready (shared secret, Redis-backed credit ledger and caches, usage limits); not deployed yet |
+| Deployment (Vercel) | Deployed on 2026-10-02: frontend at https://idx-insight.vercel.app, backend behind a shared secret, Upstash Redis for the credit ledger, caches and usage limits |
 
 ## Tech Stack
 
@@ -36,7 +39,7 @@ for tests and offline development); Phase 5 (product UI) is in progress. See
 | Runtime LLM | Provider-agnostic `LLMProvider` interface; Groq and Gemini providers over their REST APIs | Optional; see below |
 | Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Recharts, lucide-react | In progress (`frontend/`) |
 | Tests | pytest + ruff (backend); `node:test`, ESLint, `tsc` (frontend) | Implemented |
-| Deployment | Vercel: two projects from this repository (frontend, and the FastAPI backend as one Python function); Upstash Redis for shared state | Configured in code; nothing is deployed yet |
+| Deployment | Vercel: two projects from this repository (frontend, and the FastAPI backend as one Python function); Upstash Redis for shared state | Deployed (Hobby plan, region `iad1`) |
 
 **Which LLM is used right now?**
 
@@ -163,10 +166,20 @@ Restart `npm run dev` after editing `.env.local`.
 
 Two Vercel projects from this repository; the browser only talks to the frontend.
 
-| Project | Root Directory | What runs |
+| Project | Root Directory | URL | What runs |
+|---|---|---|---|
+| `idx-insight` | `frontend` | https://idx-insight.vercel.app | Next.js; its server-side proxy forwards questions to the backend with `X-Internal-Key` and the client's IP |
+| `idx-insight-api` | `backend` | https://idx-insight-api.vercel.app (only `/health` answers without the shared secret) | FastAPI as one Python function (`[tool.vercel] entrypoint` in `pyproject.toml`, limits in `vercel.json`) |
+
+Both deploy from `main`. Environment variables:
+
+| Environment | Backend | Frontend |
 |---|---|---|
-| Frontend | `frontend` | Next.js; its server-side proxy forwards questions to the backend with `X-Internal-Key` and the client's IP |
-| Backend | `backend` | FastAPI as one Python function (`[tool.vercel] entrypoint` in `pyproject.toml`, limits in `vercel.json`) |
+| Production | `SECTORS_DATA_MODE=real`, `LLM_PROVIDER=groq`, `LLM_MODEL`, `SECTORS_API_KEY`, `GROQ_API_KEY`, credit caps, `IDX_INSIGHT_API_SECRET`, `KV_REST_API_URL`/`KV_REST_API_TOKEN` (Upstash, region `iad1`, no eviction) | `IDX_INSIGHT_API_URL`, `IDX_INSIGHT_API_SECRET` |
+| Preview (other branches) | `SECTORS_DATA_MODE=mock`, `LLM_PROVIDER=none`, so branch pushes spend no credits or LLM quota | same as Production |
+
+Credits spent by the deployment are in Redis under `idx:credits:total` (Upstash
+console → Data Browser); the local ledger in `backend/.sectors_local/` counts separately.
 
 The backend refuses to serve on Vercel without `IDX_INSIGHT_API_SECRET`, and refuses
 real data without Redis, because the function's disk does not persist and the credit
@@ -184,6 +197,13 @@ caps would silently reset. With Redis:
 
 `backend/.vercelignore` keeps `backend/.sectors_local/` (real Sectors data) and
 development files out of any upload, including CLI deployments.
+
+Verified on the deployment (2026-10-02): direct backend calls without the secret
+(including `/docs`) answer 401; security headers are set; neither the backend URL nor
+any key appears in the HTML or client JavaScript; a new question takes 4–6 s on real
+data; a repeated question is answered from Redis in about 0.6 s with no Sectors or LLM
+call, also after a redeploy; the per-client limit answers 429 after five new questions
+in ten minutes. The two real-data smoke-test questions cost 9 credits.
 
 ## Project Purpose
 
