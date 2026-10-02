@@ -8,9 +8,10 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 
 ## Current Status
 
-**Phases 0–4 implemented: the agent runs on real Sectors data** (mock data remains
-for tests and offline development); Phase 5 (product UI) is in progress. See
-[PHASE.md](PHASE.md) — the project is currently until Phase 5.
+**Phases 0–5 implemented: the agent runs on real Sectors data behind a deployed
+workspace** (mock data remains for tests and offline development); Phase 6 (end-to-end
+validation) is in progress. See [PHASE.md](PHASE.md) — the project is currently until
+Phase 6.
 
 **Live:** https://idx-insight.vercel.app (real Sectors data, Groq `openai/gpt-oss-120b`).
 Every new question spends Sectors credits; repeated questions are answered from a cache.
@@ -607,7 +608,7 @@ To run the API and the UI, see
 
 ## Remaining Work
 
-Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase 5.
+Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase 6.
 
 **Product UI (Phase 5)**
 - Done: free-ticker watchlist, research history, research-type detection, ID/EN toggle,
