@@ -132,9 +132,11 @@ export default function Home() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: text, watchlist: scoped, language: lang }),
       });
-      const body = await response.json() as AgentResponse & { error?: string };
+      const body = await response.json().catch(() => ({})) as AgentResponse & { error?: unknown };
       if (!response.ok) {
-        const code = PROXY_ERRORS.find(c => c === body.error) ?? "backend_error";
+        // The Vercel Firewall answers 429 itself, with { error: { code: "429" } }, before the proxy.
+        const code = response.status === 429 && body.error !== "daily_limit" ? "rate_limited"
+          : PROXY_ERRORS.find(c => c === body.error) ?? "backend_error";
         setError(t(lang, `error.${code}`));
         return;
       }
