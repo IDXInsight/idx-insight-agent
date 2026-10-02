@@ -9,21 +9,223 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 ## Current Status
 
 **Phases 0–4 implemented: the agent runs on real Sectors data** (mock data remains
-for tests and offline development). See [PHASE.md](PHASE.md) — the project is
-currently until Phase 4.
+for tests and offline development); Phase 5 (product UI) is in progress. See
+[PHASE.md](PHASE.md) — the project is currently until Phase 5.
 
-| Area | State |
-|---|---|
-| Agent Brain (resolution, planning, discovery, relevance, second-hop) | Implemented |
-| Deterministic analytics, evidence validation and sufficiency assessment | Implemented |
-| FastAPI backend | Implemented |
-| Sectors data | Real v2 REST adapter with credit guardrails (verified live on 2026-09-27); fictional mock data for tests |
-| Runtime LLM | Provider-agnostic interface with Gemini and Groq providers; default is rules-only (no LLM). Groq (`openai/gpt-oss-120b`) verified live on all LLM paths (evaluation 16/16 on 2026-09-27); Gemini verified live for synthesis only (other calls hit 503/429 during testing) |
-| Languages | Indonesian and English, following the user's language |
-| Evaluation | 17 mock cases (offline) and 8 structural real-data cases; real-data run 8/8 with Groq on 2026-09-27 |
-| Final LLM provider/model | **Not decided** |
-| Frontend (Next.js) | Not started — Phase 5 |
-| Deployment (Vercel) | Not started — Phase 5/6 |
+**Live:** https://idx-insight.vercel.app (real Sectors data, Groq `openai/gpt-oss-120b`).
+Every new question spends Sectors credits; repeated questions are answered from a cache.
+
+Overall: the product works end to end on real data and is deployed; the UI still has
+gaps, and end-to-end validation, security testing and the submission materials have
+not started. Sectors credits used so far: about 58 of 1,000 (49 during Phase 4, 9 on
+the deployment).
+
+| Area | State | Details |
+|---|---|---|
+| Agent Brain (resolution, planning, discovery, relevance, second-hop) | Done | See [Agentic Workflow](#agentic-workflow) |
+| Deterministic analytics, evidence validation, sufficiency assessment | Done | No LLM arithmetic; unsupported claims are rejected and reported as data gaps |
+| FastAPI backend | Done | `GET /health`, `GET /v1/capabilities`, `POST /v1/agent/query` |
+| Sectors data | Done | Real v2 REST adapter for the 8 endpoints the agent needs, with credit guardrails; verified live on 2026-09-27 (real-data evaluation 8/8). Fictional mock data for tests |
+| Runtime LLM | Partial | Groq `openai/gpt-oss-120b` verified on every LLM path and used in production; Gemini verified for synthesis only. **Final provider not formally decided** |
+| Languages | Partial | The agent answers in Indonesian or English; the UI always asks for Indonesian |
+| Frontend (Next.js) | Partial | Workspace connected to the agent, evidence explorer, agent trace. Missing: free-ticker watchlist (four banks only), progress while the agent runs, language toggle, a chart in live mode, a clear message when the firewall rate limit answers 429 (see [frontend/README.md](frontend/README.md)) |
+| Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
+| Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
+| Security testing | Not started | Prompt-injection tests against the live LLM, Python dependency audit, GitHub secret scanning and push protection, runtime log review |
+| End-to-end validation (Phase 6) | Not started | Only two smoke-test questions so far; see [Remaining Work](#remaining-work) |
+| Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
+
+## Tech Stack
+
+| Layer | Technology | Status |
+|---|---|---|
+| Backend | Python 3.11+, FastAPI, Pydantic v2, httpx; served locally with uvicorn | Implemented (`backend/`) |
+| Agent Brain | Our own orchestration in Python (`backend/idx_insight/agent/`); no agent framework | Implemented |
+| Analytics & validation | Deterministic Python code (no LLM arithmetic) | Implemented |
+| Data source | Sectors v2 REST API (`https://api.sectors.app/v2/`) through `SectorsService` → `SectorsAdapter` | Implemented (real + mock adapter) |
+| Runtime LLM | Provider-agnostic `LLMProvider` interface; Groq and Gemini providers over their REST APIs | Optional; see below |
+| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Recharts, lucide-react | In progress (`frontend/`) |
+| Tests | pytest + ruff (backend); `node:test`, ESLint, `tsc` (frontend) | Implemented |
+| Deployment | Vercel: two projects from this repository (frontend, and the FastAPI backend as one Python function); Upstash Redis for shared state | Deployed (Hobby plan, region `iad1`) |
+
+**Which LLM is used right now?**
+
+- The code default is `LLM_PROVIDER=none`: no LLM, every decision uses the
+  deterministic rules. The agent is fully functional this way.
+- The setup the team develops and evaluates with is **Groq, model
+  `openai/gpt-oss-120b`** (`LLM_PROVIDER=groq`). It is the only provider verified
+  live on every LLM path (see Current Status).
+- Gemini is supported but only verified live for synthesis.
+- The final provider and model are **not decided** (Phase 6). Switching is a
+  configuration change only.
+
+## Running Locally: Mock Mode vs Real Data Mode
+
+The backend and the frontend run as two processes. The browser talks only to the
+Next.js server, which forwards questions to FastAPI; API keys live only in the
+backend's `.env`.
+
+### One-time setup
+
+```bash
+# from the repository root
+python -m venv .venv
+.venv/Scripts/pip install -e "backend[dev]"      # macOS/Linux: .venv/bin/pip
+cp .env.example .env                            # backend settings (git-ignored)
+
+cd frontend
+npm ci
+cp .env.example .env.local                      # IDX_INSIGHT_API_URL=http://127.0.0.1:8000
+```
+
+The backend reads `.env` in the repository root. Variables set in the shell
+override it, which is the easiest way to switch modes for one run.
+
+### The two modes at a glance
+
+| | Mock mode | Real data mode |
+|---|---|---|
+| Purpose | UI work, tests, development, anything offline | Demo, videos, real-data evaluation, final checks |
+| Data | Fictional fixtures that mirror Sectors response shapes (`sectors/mock_data.py`) | Live Sectors v2 API |
+| Settings | `SECTORS_DATA_MODE=mock` | `SECTORS_DATA_MODE=real` + `SECTORS_API_KEY` |
+| Sectors credits | **0** | Spent per question (see below) |
+| LLM | Recommended `LLM_PROVIDER=none` (0 LLM quota) | `LLM_PROVIDER=groq` + `LLM_MODEL=openai/gpt-oss-120b` + `GROQ_API_KEY` |
+| UI label | "Terhubung · data mock", results marked as test data | "Terhubung · data Sectors" |
+| Allowed in the demo/videos | **No** (hackathon rule: real data only) | Yes |
+
+Mock mode with an LLM enabled still spends LLM quota (Groq free tier:
+about 8,000 tokens per minute observed), so use `LLM_PROVIDER=none` unless you are
+testing the LLM paths.
+
+### Mock mode (no credits)
+
+```bash
+# terminal 1: backend
+cd backend
+SECTORS_DATA_MODE=mock LLM_PROVIDER=none ../.venv/Scripts/python -m uvicorn idx_insight.api.app:app --reload --port 8000
+
+# terminal 2: frontend
+cd frontend
+npm run dev                                     # open http://localhost:3000
+```
+
+PowerShell: set the variables first with
+`$env:SECTORS_DATA_MODE="mock"; $env:LLM_PROVIDER="none"`, then run uvicorn.
+
+Useful mock questions: "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi
+profitabilitas dan efisiensi" or "Disclosure apa yang perlu saya pantau minggu
+depan untuk bank dalam watchlist?". The fixtures include deliberate edge cases
+(conflicting BMRI growth, BBNI ratios in percent, missing data) so the UI shows
+data gaps and warnings.
+
+### Real data mode (spends credits)
+
+Before you start:
+
+1. Agree with the team before any real-data session. Each team has **1,000 credits
+   in total**, and the judging period needs a reserve (see the budget in PHASE.md).
+2. Check `backend/.sectors_local/ledger.json` for credits already used.
+3. Keep the caps in `.env`: `SECTORS_MAX_CREDITS_PER_DAY` (default 60) and
+   `SECTORS_MAX_CREDITS_TOTAL` (default 700). A request that could exceed a cap is
+   refused before it is sent.
+
+```bash
+# terminal 1: backend (keys come from .env)
+cd backend
+SECTORS_DATA_MODE=real LLM_PROVIDER=groq LLM_MODEL=openai/gpt-oss-120b \
+  ../.venv/Scripts/python -m uvicorn idx_insight.api.app:app --reload --port 8000
+
+# terminal 2: frontend
+cd frontend
+npm run dev
+```
+
+Approximate Sectors cost per question (measured call counts): one company ≈ 4
+credits, a four-bank comparison ≈ 8, sector-wide disclosure discovery ≈ 16–21. The
+8 real-data evaluation cases cost 28 credits in total.
+
+Ways to save credits:
+
+- Repeated questions are served from the local cache (`SECTORS_CACHE_MODE=readwrite`,
+  the default) at no cost.
+- `SECTORS_CACHE_MODE=replay` answers **only** from the cache and never calls the
+  API (0 credits). Use it to rehearse a demo with questions that were already asked.
+- `python -m tools.sectors_probe` shows a plan without calling anything; add
+  `--run` only when you mean to spend credits.
+- Unknown tickers and empty date windows still cost credits the first time.
+
+### Checking which mode is running
+
+```bash
+curl localhost:8000/health
+# {"status":"ok","data_mode":"mock","llm_provider":"none",...}
+
+curl -X POST localhost:8000/v1/agent/query -H "content-type: application/json" \
+  -d '{"query": "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi profitabilitas dan efisiensi"}'
+```
+
+The UI shows the same information in the top-right label. "Prototipe · data
+ilustrasi" means the frontend has no backend: `IDX_INSIGHT_API_URL` is empty, or the
+backend is not running. In that case the UI only opens illustrative examples.
+Restart `npm run dev` after editing `.env.local`.
+
+## Deployment (Vercel)
+
+Two Vercel projects from this repository; the browser only talks to the frontend.
+
+| Project | Root Directory | URL | What runs |
+|---|---|---|---|
+| `idx-insight` | `frontend` | https://idx-insight.vercel.app | Next.js; its server-side proxy forwards questions to the backend with `X-Internal-Key` and the client's IP |
+| `idx-insight-api` | `backend` | https://idx-insight-api.vercel.app (only `/health` answers without the shared secret) | FastAPI as one Python function (`[tool.vercel] entrypoint` in `pyproject.toml`, limits in `vercel.json`) |
+
+Both deploy from `main`. Environment variables:
+
+| Environment | Backend | Frontend |
+|---|---|---|
+| Production | `SECTORS_DATA_MODE=real`, `LLM_PROVIDER=groq`, `LLM_MODEL`, `SECTORS_API_KEY`, `GROQ_API_KEY`, credit caps, `IDX_INSIGHT_API_SECRET`, `KV_REST_API_URL`/`KV_REST_API_TOKEN` (Upstash, region `iad1`, no eviction) | `IDX_INSIGHT_API_URL`, `IDX_INSIGHT_API_SECRET` |
+| Preview (other branches) | `SECTORS_DATA_MODE=mock`, `LLM_PROVIDER=none`, so branch pushes spend no credits or LLM quota | same as Production |
+
+Credits spent by the deployment are in Redis under `idx:credits:total` (Upstash
+console → Data Browser); the local ledger in `backend/.sectors_local/` counts separately.
+
+The backend refuses to serve on Vercel without `IDX_INSIGHT_API_SECRET`, and refuses
+real data without Redis, because the function's disk does not persist and the credit
+caps would silently reset. With Redis:
+
+- **Credit ledger**: the worst-case cost is reserved atomically in Redis before each
+  Sectors call and corrected to the actual cost afterwards, so concurrent requests
+  cannot pass a cap together. If Redis is unreachable, Sectors calls are refused.
+- **Sectors cache**: raw responses expire with the same freshness rules as locally.
+- **Answer cache**: a repeated question (same wording, scope, language and day) is
+  answered without a new run and without spending credits or LLM quota.
+- **Usage limits**: runs per client and per day, LLM calls per day (then rules-only
+  answers), and a credit headroom check; limits answer HTTP 429 with
+  `{"error": "rate_limited" | "daily_limit"}`.
+
+`backend/.vercelignore` keeps `backend/.sectors_local/` (real Sectors data) and
+development files out of any upload, including CLI deployments.
+
+### Vercel Firewall rules
+
+These live in the Vercel dashboard (Firewall → Rules), not in the repository:
+
+| Project | Rule | Why |
+|---|---|---|
+| `idx-insight-api` | **Deny** when the `x-internal-key` header is missing and the path is not `/health` | Scanners and direct calls are blocked at the edge (403) before the function runs, so they cost no function usage. A wrong key still reaches the code and gets 401 |
+| `idx-insight` | **Rate limit** `/api/agent/query`: 10 requests per 60 s per IP, then 429 | Caps request floods, including repeated questions served from the cache, which the per-client limit in the backend does not count. Protects the Hobby plan's usage limits, which would pause the project |
+
+There is deliberately no per-IP rate limit on the backend: all legitimate backend
+traffic comes from the frontend's functions, so an IP limit there would throttle every
+visitor at once. Per-visitor limits are enforced in code with the IP the proxy forwards.
+Hobby allows one rate-limit rule and three custom rules per project.
+
+Verified on the deployment (2026-10-02): direct backend calls without the secret
+(including `/docs`) are denied at the edge (403), and with a wrong key answer 401; security headers are set; neither the backend URL nor
+any key appears in the HTML or client JavaScript; a new question takes 4–6 s on real
+data; a repeated question is answered from Redis in about 0.6 s with no Sectors or LLM
+call, also after a redeploy; the per-client limit answers 429 after five new questions
+in ten minutes, and the firewall answers 429 after ten requests in a minute. The two
+real-data smoke-test questions cost 9 credits.
 
 ## Project Purpose
 
@@ -297,6 +499,14 @@ variables already set in the real environment always take precedence.
 | `LLM_TEMPERATURE` | optional; provider default when empty |
 | `LLM_MAX_OUTPUT_TOKENS` | output cap (default 4096) |
 | `AGENT_MAX_TOOL_CALLS` / `AGENT_MAX_SECOND_HOP` / `AGENT_MAX_REQUERIES` | agent bounds |
+| `IDX_INSIGHT_API_SECRET` | shared with the Next.js server; required in `X-Internal-Key` on every route except `/health` when set; required on Vercel |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Redis for the credit ledger, caches and usage counters (also read as `KV_REST_API_URL` / `KV_REST_API_TOKEN`); required for real data on Vercel |
+| `STORAGE_PREFIX` | key prefix in Redis (default `idx:`) |
+| `RATE_LIMIT_PER_IP` / `RATE_LIMIT_WINDOW_SECONDS` | agent runs per client per window (default 5 per 600 s) |
+| `MAX_QUERIES_PER_DAY` | agent runs per day across all clients (default 150) |
+| `LLM_MAX_CALLS_PER_DAY` | LLM calls per day; beyond it answers use the rules (default 300) |
+| `QUERY_CREDIT_HEADROOM` | refuse a new run when fewer Sectors credits remain under a cap (default 10) |
+| `ANSWER_CACHE_TTL_SECONDS` | how long a repeated question is answered from the cache (default 6 h; 0 disables) |
 
 ## Implemented Features
 
@@ -328,12 +538,14 @@ cd backend
 ../.venv/Scripts/ruff check idx_insight tests evals
 ```
 
-226 deterministic tests cover agent decisions (resolution, planning, discovery,
+293 deterministic tests cover agent decisions (resolution, planning, discovery,
 relevance, second-hop with and without an LLM, recovery), analytics, evidence
 validation and sufficiency, the Sectors service and mock adapter, the LLM layer
 (Gemini/Groq request and response normalisation through a fake HTTP transport,
 structured output, tool calls, error normalisation, configuration), dependency
-direction, bilingual output, the evaluation cases and the API contract. No test
+direction, bilingual output, the evaluation cases, the API contract and the deployment
+protections (shared store, Redis REST format, shared credit ledger, internal key, usage
+limits, answer cache). No test
 needs an API key or network access; tests never read a local `.env`.
 
 ### Evaluation
@@ -357,19 +569,14 @@ Groq): mock cases 16/16 with 12 of 13 narratives accepted; real-data cases 8/8
 for 28 credits. The real-data run found a bug the mock could not (sub-sector
 display names such as "Banks" vs the slug "banks"), since fixed.
 
-Run the API locally:
-
-```bash
-cd backend
-../.venv/Scripts/python -m uvicorn idx_insight.api.app:app --reload
-curl -X POST localhost:8000/v1/agent/query -H "content-type: application/json" \
-  -d '{"query": "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi profitability dan efficiency"}'
-```
+To run the API and the UI, see
+[Running Locally: Mock Mode vs Real Data Mode](#running-locally-mock-mode-vs-real-data-mode).
 
 ## Known Limitations
 
-- Credit guardrails keep their ledger and cache on the local disk; a Vercel
-  deployment needs persistent storage for them (planned in Phase 5).
+- Locally the credit ledger and cache are files under `backend/.sectors_local/`; a
+  deployment keeps them in Redis, so the two ledgers count separately. Compare both
+  with the Sectors dashboard before setting the deployed caps.
 - Sectors bills 404s and empty results, so repeated questions about unknown
   tickers or empty windows still cost credits the first time.
 - Only Groq has been exercised on every LLM path against the live API; Gemini's
@@ -381,11 +588,55 @@ curl -X POST localhost:8000/v1/agent/query -H "content-type: application/json" \
 - Entity aliases cover a small set of companies; other companies are recognised
   by their ticker.
 - Relevance weights and thresholds are initial heuristics and need tuning on real data.
-- Only Indonesian and English are supported; the API has no authentication or
-  rate limiting yet.
+- The analysis is built for banks: the metric catalogue (NIM, CASA, LDR, CAR, NPL,
+  cost-to-income) and every evaluation case are about banks. Discovery of disclosures
+  works by ticker and sub-sector in general, but questions about non-bank companies
+  have not been tested.
+- Only part of the Sectors integration has been exercised through the deployment
+  (company report, quarterly financials, filings, per-company corporate actions). The
+  market-wide calendar, screener (NPL), sub-sector list and report dates were verified
+  live on 2026-09-27 from a local run, not yet through the deployment. Values have not
+  been cross-checked against the Sectors app.
+- Only Indonesian and English are supported, and the UI currently always asks for
+  Indonesian.
+- The UI watchlist offers four banks (BBCA, BBRI, BMRI, BBNI) although the API accepts
+  any IDX ticker.
+- The API is meant to be called only by the Next.js server (shared secret); it has no
+  end-user accounts. Per-client limits use the client IP forwarded by that server.
 
 ## Remaining Work
 
-Phases 5–7 in [PHASE.md](PHASE.md): the Next.js UI and Vercel deployment (with
-persistent credit guardrails), end-to-end validation (including the final choice
-of the runtime LLM provider), and demo/submission materials.
+Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase 5.
+
+**Product UI (Phase 5, in progress)**
+- Watchlist with any IDX ticker instead of four banks
+- Progress feedback while the agent runs (a new question takes 4–6 s)
+- Indonesian/English toggle passed to the API (validated to `id` or `en`)
+- Show the rate-limit message when the firewall answers 429 (its body is not the proxy's error format)
+- Smaller components in `frontend/app/page.tsx`, mobile layout, empty and error states
+
+**End-to-end validation (Phase 6, not started)**
+- Re-run the 8 real-data evaluation cases (about 28–35 credits)
+- Exercise every Sectors endpoint through the deployed product: sector-wide discovery
+  (market-wide calendar), NPL comparison (screener), ambiguous names, unknown tickers
+- Cross-check a sample of values against the Sectors app
+- Questions about non-bank companies and other sectors
+- Failure cases: Groq rate limit, credit cap reached, Redis unavailable, timeouts
+- Latency and credits per question type
+- Final runtime LLM provider and model
+
+**Security checks (Phase 6, not started)**
+- Prompt injection and advice requests against the live LLM (system-prompt extraction,
+  instructions to ignore rules, fabricated claims, HTML or script in questions)
+- Independent re-test of the deployment protections (missing or wrong key, spoofed
+  client IP, per-client and firewall limits, keys or backend URL in the browser)
+- `pip-audit` for the backend dependencies (`npm audit` for the frontend: 0 vulnerabilities)
+- GitHub secret scanning and push protection on the public repository
+- Review of the Vercel runtime logs for secrets
+
+**Demo and submission (Phase 7, not started)**
+- One-sentence problem statement; one-minute teaser; judging video of up to three
+  minutes recorded on the live product with real data and the LLM enabled
+- A short overview for judges at the top of this README (live link, videos, screenshots)
+- Social media post with the Sectors thumbnail template; submission form
+- Credit caps for the judging period (9–16 Oct) with at least 200 credits in reserve

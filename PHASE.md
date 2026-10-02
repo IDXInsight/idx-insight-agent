@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**Currently until Phase 4**
+**Currently until Phase 5**
 
 This document describes the complete project roadmap.
 Future phases are documented for planning and team coordination.
@@ -14,8 +14,8 @@ Future phases are documented for planning and team coordination.
 | 2 | Backend Foundation | Implemented (mock data) |
 | 3 | Analytics & Validation | Implemented (mock data) |
 | 4 | Real Sectors Integration | Implemented |
-| 5 | Product UI | Planned |
-| 6 | End-to-End Validation | Planned |
+| 5 | Product UI | In progress (deployed; UI gaps open) |
+| 6 | End-to-End Validation | Planned (not started) |
 | 7 | Demo & Submission Preparation | Planned |
 
 Hackathon: SECTORS Hackathon 2026 — Track: AI Agents & Assistants.
@@ -201,7 +201,8 @@ The same agent runs unchanged against real Sectors data by switching
   quarterly financials, company report, subsectors and screener (incl. NPL)
 - Credit guardrails: caps checked before sending, ledger, local cache/replay, 429 backoff
 - Real-data evaluation: 8/8 structural cases with Groq; one real-data bug found and fixed
-- Credits used so far: 49 of the team's allowance (probes, first runs and the evaluation)
+- Credits used in Phase 4: 49 of the team's allowance (probes, first runs and the
+  evaluation); 9 more on the deployment smoke test on 2026-10-02 (about 58 in total)
 
 ---
 
@@ -242,6 +243,20 @@ Phase 2 API contract (Phase 4 for real data).
 A user can run discovery and peer-analysis queries end-to-end in the
 Next.js UI and inspect evidence and the execution trace.
 
+### Progress (2026-10-02)
+- Deployed on Vercel from `main`: https://idx-insight.vercel.app (frontend) and
+  `idx-insight-api` (FastAPI backend), real Sectors data and Groq in Production,
+  mock data and no LLM in Preview
+- Deployment protections in place: shared secret between the Next.js proxy and FastAPI,
+  Upstash Redis for the credit ledger, Sectors cache, answer cache and usage counters,
+  per-client and daily limits, daily LLM cap with rules fallback, security headers
+- Vercel Firewall: the backend denies requests without the internal key at the edge;
+  the frontend rate-limits `/api/agent/query` to 10 requests per minute per IP
+- Verified on the deployment with two real-data questions (9 credits)
+- Still open: free-ticker watchlist (the UI offers four banks), progress while the agent
+  runs, an Indonesian/English toggle (the proxy always asks for Indonesian), a clear
+  message when the firewall answers 429, smaller components and the mobile layout
+
 ---
 
 ## Phase 6 — End-to-End Validation
@@ -274,6 +289,19 @@ User
 
 ### Dependencies
 Phases 4 and 5.
+
+### Status (2026-10-02)
+Not started. Done so far as part of Phase 5: two real-data smoke-test questions on the
+deployment and checks of the deployment protections. Open:
+- re-run of the 8 real-data evaluation cases; every Sectors endpoint through the
+  deployed product (sector-wide discovery, NPL via the screener, ambiguous names,
+  unknown tickers); a sample of values cross-checked against the Sectors app
+- questions about non-bank companies (the metric catalogue and evaluation are bank-focused)
+- failure cases (Groq rate limit, credit cap, Redis unavailable, timeouts), latency and
+  credits per question type
+- security checks: prompt injection against the live LLM, `pip-audit`, GitHub secret
+  scanning and push protection, runtime log review, independent re-test of the protections
+- final runtime LLM provider and model (Groq `openai/gpt-oss-120b` runs in production)
 
 ---
 
@@ -386,6 +414,7 @@ Next.js
 | `main` | Stable, integrated project state |
 | `agent-brain` | Intent/entity resolution, planning, discovery, relevance, second-hop decisions, evidence reasoning, LLM prompts, agent state, analytics, agent tests |
 | `backend` | FastAPI, API routes, schemas, service layer, configuration, Sectors adapters, backend tests |
+| `frontend` | Next.js UI (`frontend/`), server-side proxy to the API, frontend tests |
 
 Stable work is merged into `main` at milestones. Commits follow
 Conventional Commits (`feat(agent): …`, `fix(sectors): …`, `test(...)`, `docs(...)`).
@@ -411,6 +440,8 @@ The project must:
 
 ## Current Boundary
 
-**Currently until Phase 4.**
+**Currently until Phase 5.**
 
-Phases 5–7 are planned future development.
+Phase 5 is in progress: the product is deployed on Vercel with the deployment
+protections listed under Phase 5 (see Phase 5 → Progress); the remaining work is the UI
+items listed there. Phases 6–7 are planned future development.
