@@ -27,7 +27,8 @@ const proxyErrors: Record<string, string> = {
   invalid_request: "Pertanyaan atau watchlist tidak valid. Periksa kembali lalu coba lagi.",
   backend_unavailable: "Backend agent tidak dapat dihubungi. Coba beberapa saat lagi.",
   timeout: "Riset memakan waktu terlalu lama. Coba pertanyaan yang lebih spesifik.",
-  rate_limited: "Batas penggunaan tercapai. Coba lagi nanti.",
+  rate_limited: "Terlalu banyak pertanyaan dalam waktu singkat. Tunggu beberapa menit lalu coba lagi.",
+  daily_limit: "Kuota riset hari ini sudah habis. Pertanyaan yang pernah diajukan tetap bisa dibuka; coba pertanyaan baru besok.",
   backend_error: "Backend agent mengalami kesalahan. Coba lagi nanti.",
 };
 function format(n: number) { return `${n.toLocaleString("id-ID", { minimumFractionDigits: 1 })}%`; }
