@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import PeerChart from "@/components/peer-chart";
 import { AlertTriangle, ArrowRight, ArrowUpRight, Check, CircleHelp, Clock3, ListFilter, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { type AgentEvent, type AgentResponse, type EvidenceItem, dayMonth, eventTypeLabels, formatPercent, periodLabel } from "@/lib/agent";
 
@@ -82,6 +83,8 @@ export default function LiveResult({ result, metricLabels, onEvidence, onTrace }
       {briefing.narrative?.length ? <div className="narrative">{briefing.narrative.map((s, i) => <p key={i}>{s.text}</p>)}</div> : null}
       <div className="briefing-bottom"><span><ShieldCheck size={14} /> {result.validation.accepted} temuan tervalidasi{result.validation.rejected ? ` · ${result.validation.rejected} ditolak` : ""}</span><button className="text-button" onClick={onTrace}>Lihat proses riset <ArrowRight size={14} /></button></div>
     </section>
+
+    {peers.length > 0 && <PeerChart metrics={peers} labels={metricLabels} onEvidence={openPeerValue} />}
 
     {peers.length > 0 && <section className="panel peer-panel"><div className="section-header"><div><span className="eyebrow">PERBANDINGAN METRIK</span><h2>Periode disejajarkan per metrik</h2></div><span className={`status-pill ${peers.every(p => p.aligned) ? "" : "warn"}`}>{peers.every(p => p.aligned) ? <><Check size={12} /> Periode sejajar</> : <><AlertTriangle size={12} /> Periode berbeda</>}</span></div>
       <div className="table-scroll"><table><caption className="sr-only">Perbandingan metrik dari data Sectors. Klik angka untuk melihat bukti.</caption>
