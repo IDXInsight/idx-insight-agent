@@ -17,8 +17,8 @@ Every new question spends Sectors credits; repeated questions are answered from 
 
 Overall: the product works end to end on real data and is deployed; the UI still has
 gaps, and end-to-end validation, security testing and the submission materials have
-not started. Sectors credits used so far: about 58 of 1,000 (49 during Phase 4, 9 on
-the deployment).
+not started. Sectors credits used so far: about 98 of 1,000 (49 during Phase 4, 9 on
+the deployment, about 40 in the first local end-to-end run).
 
 | Area | State | Details |
 |---|---|---|
@@ -32,7 +32,7 @@ the deployment).
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
 | Security testing | Not started | Prompt-injection tests against the live LLM, Python dependency audit, GitHub secret scanning and push protection, runtime log review |
-| End-to-end validation (Phase 6) | Not started | Only two smoke-test questions so far; see [Remaining Work](#remaining-work) |
+| End-to-end validation (Phase 6) | In progress | First local real-data run on 2026-10-02: 5 questions, 4 as expected, 1 parser fix; see [docs/e2e-validation.md](docs/e2e-validation.md) |
 | Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
 ## Tech Stack
@@ -615,7 +615,8 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase
 - Show the rate-limit message when the firewall answers 429 (its body is not the proxy's error format)
 - Smaller components in `frontend/app/page.tsx`, mobile layout, empty and error states
 
-**End-to-end validation (Phase 6, not started)**
+**End-to-end validation (Phase 6, in progress)**
+- Done: first local real-data run, 5 questions (see [docs/e2e-validation.md](docs/e2e-validation.md))
 - Re-run the 8 real-data evaluation cases (about 28–35 credits)
 - Exercise every Sectors endpoint through the deployed product: sector-wide discovery
   (market-wide calendar), NPL comparison (screener), ambiguous names, unknown tickers

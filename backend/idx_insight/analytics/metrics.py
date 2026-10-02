@@ -73,6 +73,15 @@ BUNDLES: dict[str, list[str]] = {
     "asset_quality": ["npl_ratio"],
 }
 
+# Direction usually read as favourable, for display only (chart hint in the UI); it never
+# changes analysis or wording. Absent = no single direction (LDR has a target band).
+DIRECTION: dict[str, Literal["higher", "lower"]] = {
+    "roa": "higher", "roe": "higher", "net_interest_margin": "higher",
+    "cost_to_income_ratio": "lower", "casa_ratio": "higher", "capital_adequacy_ratio": "higher",
+    "earnings_growth_yoy": "higher", "revenue_growth_yoy": "higher",
+    "nii_growth_yoy": "higher", "loan_growth_yoy": "higher", "npl_ratio": "lower",
+}
+
 # Metrics users ask for that the agent does not compute. Reported, never guessed.
 KNOWN_UNSUPPORTED: dict[str, str] = {
     "bopo": "BOPO",

@@ -104,6 +104,14 @@ def test_peer_intent_and_metric_bundles_in_user_order():
     assert requested_metrics(intent)[-1] == "cost_to_income_ratio"
 
 
+def test_peer_intent_detects_cost_to_income_with_spaces():
+    q = "Bandingkan BBCA dan BBRI dari sisi cost to income."
+    entities, _ = resolve(q)
+    intent = rule_intent(q, entities)
+    assert intent.name == "peer_comparison"
+    assert requested_metrics(intent) == ["cost_to_income_ratio"]
+
+
 def test_single_company_with_advice_request():
     q = "Apakah BBCA layak dibeli?"
     entities, _ = resolve(q)

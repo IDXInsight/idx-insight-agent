@@ -30,7 +30,12 @@ export function clientIp(headers: Headers): string | null {
 
 /** Maps a non-OK backend reply onto an error code the UI can explain. */
 export function errorForBackend(status: number, body: unknown): ProxyError {
-  const code = (body as { error?: unknown } | null)?.error;
+  const rawError = (body as { error?: unknown } | null)?.error;
+  // Backend limits use a string code; Vercel Firewall uses an object such as
+  // { error: { code: "429", ... } }.
+  const code = typeof rawError === "string"
+    ? rawError
+    : (rawError as { code?: unknown } | null)?.code;
   if (status === 429) return code === "daily_limit" ? "daily_limit" : "rate_limited";
   if (status === 422) return "invalid_request";
   if (status === 503) return "backend_unavailable";
