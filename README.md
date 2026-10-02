@@ -8,9 +8,10 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 
 ## Current Status
 
-**Phases 0–4 implemented: the agent runs on real Sectors data** (mock data remains
-for tests and offline development); Phase 5 (product UI) is in progress. See
-[PHASE.md](PHASE.md) — the project is currently until Phase 5.
+**Phases 0–5 implemented: the agent runs on real Sectors data behind a deployed
+workspace** (mock data remains for tests and offline development); Phase 6 (end-to-end
+validation) is in progress. See [PHASE.md](PHASE.md) — the project is currently until
+Phase 6.
 
 **Live:** https://idx-insight.vercel.app (real Sectors data, Groq `openai/gpt-oss-120b`).
 Every new question spends Sectors credits; repeated questions are answered from a cache.
@@ -27,8 +28,8 @@ the deployment, about 40 in the first local end-to-end run).
 | FastAPI backend | Done | `GET /health`, `GET /v1/capabilities`, `POST /v1/agent/query` |
 | Sectors data | Done | Real v2 REST adapter for the 8 endpoints the agent needs, with credit guardrails; verified live on 2026-09-27 (real-data evaluation 8/8). Fictional mock data for tests |
 | Runtime LLM | Partial | Groq `openai/gpt-oss-120b` verified on every LLM path and used in production; Gemini verified for synthesis only. **Final provider not formally decided** |
-| Languages | Partial | The agent answers in Indonesian or English; the UI always asks for Indonesian |
-| Frontend (Next.js) | Partial | Workspace connected to the agent, evidence explorer, agent trace. Missing: free-ticker watchlist (four banks only), progress while the agent runs, language toggle, a chart in live mode, a clear message when the firewall rate limit answers 429 (see [frontend/README.md](frontend/README.md)) |
+| Languages | Done | Indonesian and English; the UI has an ID/EN toggle and asks the agent for the chosen language |
+| Frontend (Next.js) | Done | Workspace connected to the agent: free-ticker watchlist, research history, research-type detection, ID/EN toggle, small-multiple peer chart, evidence explorer, agent trace, offline message; no illustrative data (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
 | Security testing | Not started | Prompt-injection tests against the live LLM, Python dependency audit, GitHub secret scanning and push protection, runtime log review |
@@ -164,9 +165,10 @@ curl -X POST localhost:8000/v1/agent/query -H "content-type: application/json" \
   -d '{"query": "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi profitabilitas dan efisiensi"}'
 ```
 
-The UI shows the same information in the top-right label. "Prototipe · data
-ilustrasi" means the frontend has no backend: `IDX_INSIGHT_API_URL` is empty, or the
-backend is not running. In that case the UI only opens illustrative examples.
+The UI shows the same information in the top-right label. "Backend mati" means the
+frontend has no backend: `IDX_INSIGHT_API_URL` is empty, or the backend is not running.
+The research box is then disabled with the message "Backend mati, hubungi tim untuk
+menyalakan lagi."
 Restart `npm run dev` after editing `.env.local`.
 
 ## Deployment (Vercel)
@@ -597,23 +599,22 @@ To run the API and the UI, see
   market-wide calendar, screener (NPL), sub-sector list and report dates were verified
   live on 2026-09-27 from a local run, not yet through the deployment. Values have not
   been cross-checked against the Sectors app.
-- Only Indonesian and English are supported, and the UI currently always asks for
-  Indonesian.
-- The UI watchlist offers four banks (BBCA, BBRI, BMRI, BBNI) although the API accepts
-  any IDX ticker.
+- Only Indonesian and English are supported.
+- The watchlist accepts any IDX ticker, but at most 3 tickers the agent does not know
+  yet are verified per question; the rest are reported as unverified.
+- Research history is kept in the visitor's browser only.
 - The API is meant to be called only by the Next.js server (shared secret); it has no
   end-user accounts. Per-client limits use the client IP forwarded by that server.
 
 ## Remaining Work
 
-Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase 5.
+Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase 6.
 
-**Product UI (Phase 5, in progress)**
-- Watchlist with any IDX ticker instead of four banks
-- Progress feedback while the agent runs (a new question takes 4–6 s)
-- Indonesian/English toggle passed to the API (validated to `id` or `en`)
-- Show the rate-limit message when the firewall answers 429 (its body is not the proxy's error format)
-- Smaller components in `frontend/app/page.tsx`, mobile layout, empty and error states
+**Product UI (Phase 5)**
+- Done: free-ticker watchlist, research history, research-type detection, ID/EN toggle,
+  progress feedback, firewall 429 message, small-multiple chart, offline state, mobile layout
+- Smaller components in `frontend/app/page.tsx`
+- A trend chart needs multi-period series in the API response
 
 **End-to-end validation (Phase 6, in progress)**
 - Done: first local real-data run, 5 questions (see [docs/e2e-validation.md](docs/e2e-validation.md))

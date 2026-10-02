@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Activity, ArrowRight, ArrowUpRight, BookOpen, Pause, Play, ShieldCheck } from "lucide-react";
+import { type Lang, type MessageKey, t } from "@/lib/i18n";
 
 type ResearchView = "workspace" | "discovery" | "peers" | "company";
 
@@ -11,20 +12,21 @@ type AnimatedWaveFooterProps = {
   onNewResearch: () => void;
   onOpenGuide: () => void;
   onOpenTrace: () => void;
-  live?: boolean;
-  dataLabel?: string;
+  lang: Lang;
+  /** Connection state shown next to the guide, e.g. "Terhubung · data Sectors". */
+  statusLabel: string;
 };
 
-const navigation: { view: ResearchView; label: string }[] = [
-  { view: "workspace", label: "Ruang riset" },
-  { view: "discovery", label: "Disclosure radar" },
-  { view: "peers", label: "Peer lens" },
-  { view: "company", label: "Konteks emiten" },
+const navigation: { view: ResearchView; label: MessageKey }[] = [
+  { view: "workspace", label: "nav.workspace" },
+  { view: "discovery", label: "nav.discovery" },
+  { view: "peers", label: "nav.peers" },
+  { view: "company", label: "nav.company" },
 ];
 
 /** Shared footer, adapted from the supplied animated-wave-footer reference. */
 export default function AnimatedWaveFooter({
-  activeView, onNavigate, onNewResearch, onOpenGuide, onOpenTrace, live = false, dataLabel = "data Sectors",
+  activeView, onNavigate, onNewResearch, onOpenGuide, onOpenTrace, lang, statusLabel,
 }: AnimatedWaveFooterProps) {
   const [paused, setPaused] = useState(false);
 
@@ -34,7 +36,7 @@ export default function AnimatedWaveFooter({
   }
 
   return (
-    <footer className="wave-footer" aria-label="Footer IDX Insight">
+    <footer className="wave-footer" aria-label={t(lang, "footer.label")}>
       <div className="wave-footer-art" aria-hidden="true">
         <div className={`wave-footer-track${paused ? " is-paused" : ""}`}>
           {[0, 1].map(copy => (
@@ -53,42 +55,42 @@ export default function AnimatedWaveFooter({
               <span className="wave-footer-mark"><Activity size={20} aria-hidden="true" /></span>
               <span>idx<span>insight</span></span>
             </div>
-            <p>Temukan konteks.<br />Pahami yang penting.</p>
-            <span className="wave-footer-description">Ruang riset emiten perbankan dengan temuan yang bisa ditelusuri.</span>
+            <p>{t(lang, "heading.line1")}<br />{t(lang, "heading.line2")}</p>
+            <span className="wave-footer-description">{t(lang, "footer.description")}</span>
             <button className="wave-footer-cta" onClick={() => { onNewResearch(); window.scrollTo({ top: 0, behavior: "instant" }); }}>
-              Mulai riset baru <ArrowRight size={14} aria-hidden="true" />
+              {t(lang, "footer.cta")} <ArrowRight size={14} aria-hidden="true" />
             </button>
           </section>
 
           <nav className="wave-footer-column" aria-labelledby="footer-explore">
-            <h2 id="footer-explore">Jelajahi riset</h2>
+            <h2 id="footer-explore">{t(lang, "footer.explore")}</h2>
             {navigation.map(item => (
               <button key={item.view} aria-current={activeView === item.view ? "page" : undefined} onClick={() => navigate(item.view)}>
-                {item.label}<ArrowUpRight size={12} aria-hidden="true" />
+                {t(lang, item.label)}<ArrowUpRight size={12} aria-hidden="true" />
               </button>
             ))}
           </nav>
 
           <section className="wave-footer-column" aria-labelledby="footer-sources">
-            <h2 id="footer-sources">Data & sumber</h2>
-            <a href="https://sectors.app/" target="_blank" rel="noopener noreferrer">Sectors <ArrowUpRight size={12} aria-hidden="true" /><span className="sr-only"> (buka tab baru)</span></a>
-            <a href="https://docs.sectors.app/get-started/v2/overview" target="_blank" rel="noopener noreferrer">Dokumentasi API v2 <ArrowUpRight size={12} aria-hidden="true" /><span className="sr-only"> (buka tab baru)</span></a>
-            <button onClick={onOpenTrace}>Proses & validasi bukti <ArrowUpRight size={12} aria-hidden="true" /></button>
-            <span className="wave-footer-source-note"><ShieldCheck size={14} aria-hidden="true" /> Dibangun di atas bukti</span>
+            <h2 id="footer-sources">{t(lang, "footer.data")}</h2>
+            <a href="https://sectors.app/" target="_blank" rel="noopener noreferrer">Sectors <ArrowUpRight size={12} aria-hidden="true" /><span className="sr-only">{t(lang, "newTab")}</span></a>
+            <a href="https://docs.sectors.app/get-started/v2/overview" target="_blank" rel="noopener noreferrer">{t(lang, "footer.docs")} <ArrowUpRight size={12} aria-hidden="true" /><span className="sr-only">{t(lang, "newTab")}</span></a>
+            <button onClick={onOpenTrace}>{t(lang, "footer.process")} <ArrowUpRight size={12} aria-hidden="true" /></button>
+            <span className="wave-footer-source-note"><ShieldCheck size={14} aria-hidden="true" /> {t(lang, "sidebar.noteTitle")}</span>
           </section>
 
           <section className="wave-footer-column wave-footer-guide" aria-labelledby="footer-guide">
-            <h2 id="footer-guide">Kenali workspace</h2>
-            <p>Pelajari cara membaca disclosure, membandingkan bank, dan menelusuri sumber setiap temuan.</p>
-            <button className="wave-footer-guide-button" onClick={onOpenGuide}><BookOpen size={14} aria-hidden="true" /> Panduan riset <ArrowRight size={13} aria-hidden="true" /></button>
-            <span className="wave-footer-demo"><span aria-hidden="true" /> {live ? `Terhubung ke agent · ${dataLabel}` : "Prototipe · data ilustrasi"}</span>
+            <h2 id="footer-guide">{t(lang, "footer.know")}</h2>
+            <p>{t(lang, "footer.knowText")}</p>
+            <button className="wave-footer-guide-button" onClick={onOpenGuide}><BookOpen size={14} aria-hidden="true" /> {t(lang, "sidebar.guide")} <ArrowRight size={13} aria-hidden="true" /></button>
+            <span className="wave-footer-demo"><span aria-hidden="true" /> {statusLabel}</span>
           </section>
         </div>
 
         <div className="wave-footer-bottom">
           <span>© 2026 IDX Insight Agent</span>
-          <span>Informasi & analisis. Bukan rekomendasi investasi.</span>
-          <div className="wave-footer-bottom-right"><span>SECTORS HACKATHON 2026</span><button className="wave-footer-motion" onClick={() => setPaused(value => !value)} aria-label={paused ? "Putar animasi gelombang" : "Jeda animasi gelombang"} title={paused ? "Putar animasi gelombang" : "Jeda animasi gelombang"}>{paused ? <Play size={12} aria-hidden="true" /> : <Pause size={12} aria-hidden="true" />}</button></div>
+          <span>{t(lang, "footer.disclaimer")}</span>
+          <div className="wave-footer-bottom-right"><span>SECTORS HACKATHON 2026</span><button className="wave-footer-motion" onClick={() => setPaused(value => !value)} aria-label={t(lang, paused ? "footer.play" : "footer.pause")} title={t(lang, paused ? "footer.play" : "footer.pause")}>{paused ? <Play size={12} aria-hidden="true" /> : <Pause size={12} aria-hidden="true" />}</button></div>
         </div>
       </div>
     </footer>

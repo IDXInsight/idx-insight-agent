@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**Currently until Phase 5**
+**Currently until Phase 6**
 
 This document describes the complete project roadmap.
 Future phases are documented for planning and team coordination.
@@ -14,8 +14,8 @@ Future phases are documented for planning and team coordination.
 | 2 | Backend Foundation | Implemented (mock data) |
 | 3 | Analytics & Validation | Implemented (mock data) |
 | 4 | Real Sectors Integration | Implemented |
-| 5 | Product UI | In progress (deployed; UI gaps open) |
-| 6 | End-to-End Validation | Planned (not started) |
+| 5 | Product UI | Implemented (deployed) |
+| 6 | End-to-End Validation | In progress |
 | 7 | Demo & Submission Preparation | Planned |
 
 Hackathon: SECTORS Hackathon 2026 — Track: AI Agents & Assistants.
@@ -253,9 +253,10 @@ Next.js UI and inspect evidence and the execution trace.
 - Vercel Firewall: the backend denies requests without the internal key at the edge;
   the frontend rate-limits `/api/agent/query` to 10 requests per minute per IP
 - Verified on the deployment with two real-data questions (9 credits)
-- Still open: free-ticker watchlist (the UI offers four banks), progress while the agent
-  runs, an Indonesian/English toggle (the proxy always asks for Indonesian), a clear
-  message when the firewall answers 429, smaller components and the mobile layout
+- UI follow-ups done on 2026-10-02: free-ticker watchlist, research history,
+  research-type detection, Indonesian/English toggle, progress feedback, the firewall's
+  429 message, small-multiple peer chart, offline state instead of illustrative data,
+  mobile layout. Still open: smaller components in `frontend/app/page.tsx`
 
 ---
 
@@ -440,8 +441,8 @@ The project must:
 
 ## Current Boundary
 
-**Currently until Phase 5.**
+**Currently until Phase 6.**
 
-Phase 5 is in progress: the product is deployed on Vercel with the deployment
-protections listed under Phase 5 (see Phase 5 → Progress); the remaining work is the UI
-items listed there. Phases 6–7 are planned future development.
+Phase 5 is implemented: the product is deployed on Vercel with the deployment
+protections and UI listed under Phase 5 (see Phase 5 → Progress). Phase 6 started on
+2026-10-02 by team decision (first run in docs/e2e-validation.md). Phase 7 is planned.

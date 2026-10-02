@@ -31,10 +31,10 @@ Authored by: Prama
 | Finding | Follow-up |
 |---|---|
 | Chart hard to read | Replaced by small multiples: one column chart per metric, sorted by the favourable direction, peer median line, colours fixed per company |
-| After opening one company, the four-bank comparison could not be shown again | Open: the UI keeps only one result |
-| No research history; a new question replaced the previous result | Open |
-| Placeholders (profile, labels, illustrative data next to real results) | Open |
-| The research-type tabs did not follow the typed question | Open |
+| After opening one company, the four-bank comparison could not be shown again | Fixed: every result is kept; each view opens the latest result of its type |
+| No research history; a new question replaced the previous result | Fixed: research history in the sidebar, reopened without a new API call |
+| Placeholders (profile, labels, illustrative data next to real results) | Fixed: no illustrative data, "Researcher" profile, ID/EN labels, offline message |
+| The research-type tabs did not follow the typed question | Fixed: the type is detected while typing; the backend still decides |
 
 ### Not covered by this run
 

@@ -1,77 +1,103 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Activity, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, BookOpen, Check, ChevronDown, ChevronRight, CircleHelp, Clock3, FileCheck2, FileText, Fingerprint, FlaskConical, Layers3, LayoutDashboard, ListFilter, LoaderCircle, PanelLeftClose, Plus, Search, ShieldCheck, Sparkles, Target, TrendingUp, WalletCards, X } from "lucide-react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Activity, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, BookOpen, Check, ChevronRight, CircleHelp, Clock3, FileCheck2, History, Layers3, LayoutDashboard, LoaderCircle, PanelLeftClose, Plus, PowerOff, Search, ShieldCheck, Sparkles, Target, Trash2, TrendingUp, X } from "lucide-react";
 import AnimatedWaveFooter from "@/components/ui/animated-wave-footer";
-import ChartLineDefault, { bankColors, type Bank, type Metric } from "@/components/ui/v-chart-4";
 import LiveResult, { type LiveEvidence, secondHopLabel } from "@/components/live-result";
-import { type AgentResponse, type AgentStatus, type ResultView, formatEvidenceValue, formatPercent, isUrl, periodLabel, viewForIntent } from "@/lib/agent";
+import TickerMark from "@/components/ticker-mark";
+import { type AgentResponse, type AgentStatus, type MetricInfo, type ResultView, formatEvidenceValue, formatPercent, isUrl, periodLabel, viewForIntent } from "@/lib/agent";
+import { type Lang, type MessageKey, isLang, numberLocale, t } from "@/lib/i18n";
+import { colorOrder } from "@/lib/palette";
+import {
+  DEFAULT_WATCHLIST, type HistoryEntry, MAX_WATCHLIST, addToHistory, guessIntent, isHistory, isTickerList,
+  parseTickers, readStored, watchlistForQuery, writeStored,
+} from "@/lib/research";
 
-type View = "workspace" | "discovery" | "peers" | "company";
-type Evidence = { title: string; ticker: string; value?: string; period?: string; field?: string; detail: string };
-const banks: Bank[] = ["BBCA", "BBRI", "BMRI", "BBNI"];
-const names: Record<Bank, string> = { BBCA: "Bank Central Asia", BBRI: "Bank Rakyat Indonesia", BMRI: "Bank Mandiri", BBNI: "Bank Negara Indonesia" };
-const figures = { BBCA: [24.2, 3.9, 31.2, 12.8], BBRI: [19.1, 3.1, 42.6, 8.2], BMRI: [22.8, 3.5, 35.4, 10.6], BBNI: [14.7, 2.2, 46.8, 6.1] };
-const events = [
-  { ticker: "BBRI" as Bank, day: "29", month: "SEP", type: "Kepemilikan", title: "Perubahan kepemilikan oleh direksi", text: "Transaksi insider pada bank dalam watchlist. Tinjau skala perubahan dan konteks kinerjanya.", score: "Relevansi tinggi", icon: Fingerprint },
-  { ticker: "BBCA" as Bank, day: "30", month: "SEP", type: "Dividen", title: "Jadwal pembayaran dividen interim", text: "Tanggal pembayaran berada dalam periode pantauan. Konteks profitabilitas tersedia untuk ditelusuri.", score: "Relevansi tinggi", icon: WalletCards },
-  { ticker: "BMRI" as Bank, day: "02", month: "OKT", type: "RUPS", title: "Agenda rapat umum pemegang saham", text: "Agenda tata kelola dalam periode pilihan. Buka rincian untuk melihat informasi yang perlu diperiksa.", score: "Relevansi sedang", icon: FileText },
-];
-const prompts: Record<Exclude<View,"workspace">, string> = {
-  discovery: "Disclosure apa yang perlu saya pantau minggu depan untuk bank dalam watchlist?",
-  peers: "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi profitabilitas dan efisiensi.",
-  company: "Bagaimana perkembangan kinerja BBCA dan kejadian yang perlu diperhatikan?",
-};
-const proxyErrors: Record<string, string> = {
-  not_configured: "Backend agent belum dikonfigurasi. Menampilkan contoh riset.",
-  invalid_request: "Pertanyaan atau watchlist tidak valid. Periksa kembali lalu coba lagi.",
-  backend_unavailable: "Backend agent tidak dapat dihubungi. Coba beberapa saat lagi.",
-  timeout: "Riset memakan waktu terlalu lama. Coba pertanyaan yang lebih spesifik.",
-  rate_limited: "Terlalu banyak pertanyaan dalam waktu singkat. Tunggu beberapa menit lalu coba lagi.",
-  daily_limit: "Kuota riset hari ini sudah habis. Pertanyaan yang pernah diajukan tetap bisa dibuka; coba pertanyaan baru besok.",
-  backend_error: "Backend agent mengalami kesalahan. Coba lagi nanti.",
-};
-function format(n: number) { return `${n.toLocaleString("id-ID", { minimumFractionDigits: 1 })}%`; }
-function BankMark({ bank }: { bank: Bank }) { return <span className={`bank-mark ${bank.toLowerCase()}`}>{bank.slice(0, 2)}</span>; }
+type View = "workspace" | ResultView;
+
+const STORAGE = { lang: "idx-insight.lang", watchlist: "idx-insight.watchlist", history: "idx-insight.history", metrics: "idx-insight.metrics" };
+const RESULT_VIEWS: ResultView[] = ["discovery", "peers", "company"];
+const PROXY_ERRORS = ["not_configured", "invalid_request", "backend_unavailable", "timeout", "rate_limited", "daily_limit", "backend_error"] as const;
+const viewIcon = { workspace: LayoutDashboard, discovery: Layers3, peers: BarChart3, company: BookOpen };
+const intentIcon = { discovery: Layers3, peers: BarChart3, company: Search };
+const titleKey: Record<View, MessageKey> = { workspace: "title.workspace", discovery: "title.discovery", peers: "title.peers", company: "title.company" };
+const navKey: Record<View, MessageKey> = { workspace: "nav.workspace", discovery: "nav.discovery", peers: "nav.peers", company: "nav.company" };
+const exampleKey: Record<ResultView, MessageKey> = { discovery: "example.discovery", peers: "example.peers", company: "example.company" };
+const shortExampleKey: Record<ResultView, MessageKey> = { discovery: "example.discoveryShort", peers: "example.peersShort", company: "example.companyShort" };
+const traceSteps: [MessageKey, MessageKey][] = [["trace.s1", "trace.s1d"], ["trace.s2", "trace.s2d"], ["trace.s3", "trace.s3d"], ["trace.s4", "trace.s4d"], ["trace.s5", "trace.s5d"], ["trace.s6", "trace.s6d"]];
+
+function isMetricInfo(value: unknown): value is Record<string, MetricInfo> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function longDate(lang: Lang): string {
+  return new Date().toLocaleDateString(numberLocale[lang], { day: "numeric", month: "long", year: "numeric" });
+}
 
 export default function Home() {
+  const [lang, setLang] = useState<Lang>("id");
+  const [status, setStatus] = useState<AgentStatus | null>(null);
+  const [metrics, setMetrics] = useState<Record<string, MetricInfo>>({});
+  const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<View>("workspace");
-  const [intent, setIntent] = useState<Exclude<View,"workspace">>("discovery");
-  const [watchlist, setWatchlist] = useState<Bank[]>(banks);
   const [query, setQuery] = useState("");
-  const [period, setPeriod] = useState("Minggu depan");
-  const [metric, setMetric] = useState<Metric>("roe");
-  const [visibleBanks, setVisibleBanks] = useState<Bank[]>(banks);
-  const [filter, setFilter] = useState("Semua");
-  const [drawer, setDrawer] = useState<Evidence | null>(null);
-  const [trace, setTrace] = useState(false);
-  const [help, setHelp] = useState(false);
-  const [addBank, setAddBank] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
   const [menu, setMenu] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState<Bank>("BBCA");
-  const [status, setStatus] = useState<AgentStatus>({ live: false });
-  const [result, setResult] = useState<{ view: ResultView; query: string; response: AgentResponse } | null>(null);
-  const [liveDrawer, setLiveDrawer] = useState<LiveEvidence | null>(null);
+  const [evidence, setEvidence] = useState<LiveEvidence | null>(null);
+  const [trace, setTrace] = useState(false);
+  const [help, setHelp] = useState(false);
+  const [editWatchlist, setEditWatchlist] = useState(false);
+  const [tickerInput, setTickerInput] = useState("");
+  const [tickerError, setTickerError] = useState("");
+  const [today, setToday] = useState("");
+  const loaded = useRef(false);
   const queryRef = useRef<HTMLTextAreaElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const overlay = !!drawer || !!liveDrawer || trace || help || addBank;
-  const live = status.live;
-  const showLive = !!result && view === result.view;
-  const liveRoe = showLive ? result.response.peer_comparison.roe : undefined;
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const overlay = !!evidence || trace || help || editWatchlist;
+  const offline = status !== null && !status.live;
+  // A result view shows the result opened from the history, else the latest result of that type.
+  const entry = view === "workspace" ? null
+    : history.find(e => e.id === activeId && e.view === view) ?? history.find(e => e.view === view) ?? null;
+  const result = entry?.response ?? null;
+  const order = colorOrder(watchlist, result ? [...result.scope.companies, ...Object.values(result.peer_comparison).flatMap(p => Object.keys(p.values))] : []);
+  const scoped = watchlistForQuery(query, watchlist);
+  const detected = guessIntent(query, watchlist);
+  const roe = result?.peer_comparison.roe;
+  const statusLabel = status === null ? t(lang, "status.connecting") : !status.live ? t(lang, "status.offline") : status.dataSource === "mock" ? t(lang, "status.mock") : t(lang, "status.sectors");
+
+  // Preferences and history live in this browser only; any storage failure keeps the defaults.
   useEffect(() => {
+    queueMicrotask(() => {
+      const storedLang = readStored(STORAGE.lang, "id", isLang);
+      setLang(storedLang);
+      setWatchlist(readStored(STORAGE.watchlist, DEFAULT_WATCHLIST, isTickerList));
+      setHistory(readStored(STORAGE.history, [], isHistory));
+      setMetrics(readStored(STORAGE.metrics, {}, isMetricInfo));
+      setToday(longDate(storedLang));
+      loaded.current = true;
+    });
     const controller = new AbortController();
     fetch("/api/agent/status", { signal: controller.signal })
       .then(r => r.json() as Promise<AgentStatus>)
-      .then(setStatus)
-      .catch(() => {});
+      .then(next => { setStatus(next); if (next.live) { setMetrics(next.metrics); writeStored(STORAGE.metrics, next.metrics); } })
+      .catch(() => { if (!controller.signal.aborted) setStatus({ live: false }); });
     return () => controller.abort();
   }, []);
-  function closeOverlays() { setDrawer(null); setLiveDrawer(null); setTrace(false); setHelp(false); setAddBank(false); }
+  useEffect(() => { if (loaded.current) writeStored(STORAGE.watchlist, watchlist); }, [watchlist]);
+  useEffect(() => { if (loaded.current) writeStored(STORAGE.history, history); }, [history]);
+  useEffect(() => { document.documentElement.lang = lang; }, [lang]);
+  useEffect(() => {
+    if (!busy) return;
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 500);
+    return () => clearInterval(timer);
+  }, [busy]);
+
+  function closeOverlays() { setEvidence(null); setTrace(false); setHelp(false); setEditWatchlist(false); setTickerError(""); }
   useEffect(() => {
     if (!overlay) return;
     const previous = document.activeElement as HTMLElement;
@@ -91,124 +117,135 @@ export default function Home() {
     return () => { document.body.style.overflow = oldOverflow; window.removeEventListener("keydown", key); previous?.focus(); };
   }, [overlay]);
 
-  function navigate(next: View) { setView(next); setMenu(false); setError(""); if (next !== "workspace") { setIntent(next); setQuery(prompts[next]); } }
-  function research() {
-    if (query.trim().length < 3) { setError("Tulis pertanyaan riset atau pilih salah satu contoh di bawah."); queryRef.current?.focus(); return; }
-    if (!watchlist.length) { setError("Tambahkan setidaknya satu bank ke watchlist."); return; }
-    if (intent === "peers" && watchlist.length < 2) { setError("Pilih setidaknya dua bank untuk perbandingan."); return; }
-    setError(""); setBusy(true);
-    if (live) { void runAgent(); return; }
-    timer.current = setTimeout(() => { setView(intent); setBusy(false); setVisibleBanks(watchlist); }, 700);
-  }
-  async function runAgent() {
+  function changeLang(next: Lang) { setLang(next); writeStored(STORAGE.lang, next); setToday(longDate(next)); }
+  function navigate(next: View) { setView(next); setMenu(false); setError(""); window.scrollTo({ top: 0 }); }
+  function ask(text: string) { setQuery(text); navigate("workspace"); requestAnimationFrame(() => queryRef.current?.focus()); }
+  function openEntry(e: HistoryEntry) { setActiveId(e.id); navigate(e.view); }
+
+  async function research() {
+    const text = query.trim();
+    if (text.length < 3) { setError(t(lang, "error.short")); queryRef.current?.focus(); return; }
+    setError(""); setBusy(true); setElapsed(0);
     try {
       const response = await fetch("/api/agent/query", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: query.trim(), watchlist }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: text, watchlist: scoped, language: lang }),
       });
       const body = await response.json() as AgentResponse & { error?: string };
-      if (!response.ok) { setError(proxyErrors[body.error ?? ""] ?? proxyErrors.backend_error); return; }
-      const next = viewForIntent(body.scope.intent, intent);
-      setResult({ view: next, query: query.trim(), response: body });
-      setView(next);
+      if (!response.ok) {
+        const code = PROXY_ERRORS.find(c => c === body.error) ?? "backend_error";
+        setError(t(lang, `error.${code}`));
+        return;
+      }
+      const next: HistoryEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, query: text, language: lang,
+        askedAt: new Date().toISOString(), view: viewForIntent(body.scope.intent, detected ?? "discovery"), response: body,
+      };
+      setHistory(prev => addToHistory(prev, next));
+      setActiveId(next.id);
+      navigate(next.view);
     } catch {
-      setError(proxyErrors.backend_unavailable);
+      setError(t(lang, "error.backend_unavailable"));
     } finally {
       setBusy(false);
     }
   }
-  function evidence(bank: Bank, index: number) {
-    const labels = ["Return on equity", "Return on assets", "Cost-to-income", "Pertumbuhan laba YoY"];
-    setDrawer({ title: labels[index], ticker: bank, value: format(figures[bank][index]), period: index === 3 ? "Q2 2026 vs Q2 2025" : "Tahun buku 2025", field: ["profitability.roe", "profitability.roa", "profitability.cost_to_income_ratio", "earnings_growth_yoy"][index], detail: "Nilai sintetis untuk meninjau desain. Saat backend dihubungkan, panel ini menampilkan evidence dan sumber yang benar-benar dikembalikan Sectors." });
+
+  function addTickers(event: FormEvent) {
+    event.preventDefault();
+    const { tickers, invalid } = parseTickers(tickerInput);
+    if (invalid.length) { setTickerError(t(lang, "watch.invalid", { list: invalid.join(", ") })); return; }
+    const merged = [...new Set([...watchlist, ...tickers])];
+    if (merged.length > MAX_WATCHLIST) { setTickerError(t(lang, "watch.full")); return; }
+    setWatchlist(merged); setTickerInput(""); setTickerError("");
   }
-  function toggleSeries(bank: Bank) { setVisibleBanks(prev => prev.includes(bank) ? prev.filter(b => b !== bank) : [...prev, bank]); }
-  const shownEvents = events.filter(e => watchlist.includes(e.ticker) && (filter === "Semua" || e.type === filter));
-  const titles: Record<View, string> = { workspace: "Ruang riset", discovery: "Briefing disclosure", peers: "Perbandingan bank", company: "Konteks emiten" };
+  function askedAt(iso: string) {
+    return new Date(iso).toLocaleString(numberLocale[lang], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
 
   return <div className="app-shell">
     <aside className={`sidebar ${menu ? "mobile-open" : ""}`}>
-      <button className="brand" onClick={() => navigate("workspace")}><span className="brand-symbol"><Activity size={22} /></span><span>idx<span className="brand-light">insight</span><small>RESEARCH WORKSPACE</small></span></button>
-      <button className="new-research" onClick={() => { navigate("workspace"); setQuery(""); queryRef.current?.focus(); }}><Plus size={16} /> Riset baru <span>↗</span></button>
-      <div className="nav-label">WORKSPACE</div>
-      <nav aria-label="Navigasi utama">
-        {([{ id: "workspace", label: "Ringkasan", icon: LayoutDashboard }, { id: "discovery", label: "Disclosure", icon: Layers3 }, { id: "peers", label: "Peer lens", icon: BarChart3 }, { id: "company", label: "Konteks emiten", icon: BookOpen }] as const).map(item => <button key={item.id} className={`nav-item ${view === item.id ? "active" : ""}`} onClick={() => navigate(item.id)}><item.icon size={17} />{item.label}{view === item.id && <span className="nav-dot" />}</button>)}
+      <button className="brand" onClick={() => navigate("workspace")}><span className="brand-symbol"><Activity size={22} /></span><span>idx<span className="brand-light">insight</span><small>{t(lang, "brand.tagline")}</small></span></button>
+      <button className="new-research" onClick={() => ask("")}><Plus size={16} /> {t(lang, "nav.new")} <span>↗</span></button>
+      <div className="nav-label">{t(lang, "nav.label")}</div>
+      <nav aria-label={t(lang, "nav.main")}>
+        {(["workspace", ...RESULT_VIEWS] as View[]).map(id => { const Icon = viewIcon[id]; return <button key={id} className={`nav-item ${view === id ? "active" : ""}`} aria-current={view === id ? "page" : undefined} onClick={() => navigate(id)}><Icon size={17} />{t(lang, navKey[id])}{view === id && <span className="nav-dot" />}</button>; })}
       </nav>
-      <div className="sidebar-note"><span className="label-with-icon"><ShieldCheck size={16} /> Dibangun di atas bukti</span><p>Setiap temuan punya sumber. Setiap keterbatasan dijelaskan.</p></div>
-      <div className="sidebar-bottom"><button className="nav-item" onClick={() => setHelp(true)}><CircleHelp size={17} /> Panduan riset <ArrowUpRight size={14} /></button><div className="profile"><span className="avatar">RI</span><div>Ruang riset pribadi<small>IDX · Sektor perbankan</small></div><ChevronDown size={14} /></div></div>
+      <div className="history">
+        <div className="nav-label history-label"><span><History size={11} /> {t(lang, "history.label")}</span>{history.length > 0 && <button className="icon-button tiny" aria-label={t(lang, "history.clear")} title={t(lang, "history.clear")} onClick={() => { setHistory([]); setActiveId(null); navigate("workspace"); }}><Trash2 size={12} /></button>}</div>
+        {history.length === 0 ? <p className="history-empty">{t(lang, "history.empty")}</p> : <ul className="history-list">{history.map(e => { const Icon = intentIcon[e.view]; return <li key={e.id}><button className={entry?.id === e.id ? "active" : ""} onClick={() => openEntry(e)} title={e.query}><Icon size={13} /><span><strong>{e.query}</strong><small>{askedAt(e.askedAt)} · {e.language.toUpperCase()}</small></span></button></li>; })}</ul>}
+      </div>
+      <div className="sidebar-bottom"><button className="nav-item" onClick={() => setHelp(true)}><CircleHelp size={17} /> {t(lang, "sidebar.guide")} <ArrowUpRight size={14} /></button><div className="profile"><span className="avatar">R</span><div>{t(lang, "profile.name")}<small>{t(lang, "profile.sub")}</small></div></div></div>
     </aside>
     <div className="main-shell">
-      <header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-toggle" aria-label="Buka navigasi" onClick={() => setMenu(!menu)}><PanelLeftClose size={18} /></button><span>Workspace</span><ChevronRight size={13} /><strong>{titles[view]}</strong></div><div className="topbar-right"><span className="prototype-label">{live ? <><ShieldCheck size={13} /> Terhubung · data {status.dataSource === "mock" ? "mock" : "Sectors"}</> : <><FlaskConical size={13} /> Prototipe · data ilustrasi</>}</span><span className="header-divider" /><span className="language">ID</span></div></header>
+      <header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-toggle" aria-label={t(lang, "nav.open")} aria-expanded={menu} onClick={() => setMenu(!menu)}><PanelLeftClose size={18} /></button><span>Workspace</span><ChevronRight size={13} /><strong>{t(lang, titleKey[view])}</strong></div>
+        <div className="topbar-right"><span className={`prototype-label ${offline ? "offline" : ""}`}>{status === null ? <LoaderCircle size={13} className="spin" /> : offline ? <PowerOff size={13} /> : <ShieldCheck size={13} />} {statusLabel}</span><span className="header-divider" />
+          <div className="lang-toggle" role="group" aria-label={t(lang, "lang.label")}>{(["id", "en"] as Lang[]).map(l => <button key={l} aria-pressed={lang === l} className={lang === l ? "selected" : ""} onClick={() => changeLang(l)}>{l.toUpperCase()}</button>)}</div></div></header>
       <main>
-        <div className="page-heading"><div><div className="eyebrow"><span className="tiny-dot" /> IDX BANKING INTELLIGENCE</div><h1>{view === "workspace" ? <>Temukan konteks.<br className="small-break" /> Pahami yang penting.</> : titles[view]}</h1><p>{view === "workspace" ? "Dari disclosure hingga kinerja keuangan. Riset yang bisa kamu telusuri." : "Temuan, konteks, dan bukti dalam satu ruang riset."}</p></div>{showLive ? <span className="date-label"><Clock3 size={14} /> {result.response.scope.timeframe?.label ?? "Periode terbaru"}<small>Periode riset</small></span> : <span className="date-label"><Clock3 size={14} /> 28 September 2026<small>Tanggal acuan desain</small></span>}</div>
-        {showLive
-          ? <div className="demo-note"><ShieldCheck size={14} /><span>Hasil agent dari data {result.response.data_source === "mock" ? "mock (pengujian, bukan data pasar)" : "Sectors"}{result.response.llm_provider !== "none" ? " dengan sintesis LLM" : ""}. Informasi dan analisis, bukan rekomendasi investasi.</span></div>
-          : <div className="demo-note"><FlaskConical size={14} /><span>{live && view !== "workspace" ? "Contoh tampilan dengan data ilustrasi. Jalankan riset untuk melihat hasil dari data Sectors." : live ? "Agent terhubung. Pertanyaanmu dijawab dari data Sectors." : "Mode pratinjau desain. Semua angka dan kejadian bersifat ilustratif, bukan data pasar."}</span></div>}
+        <div className="page-heading"><div><div className="eyebrow"><span className="tiny-dot" /> {t(lang, "heading.eyebrow")}</div><h1>{view === "workspace" ? <>{t(lang, "heading.line1")}<br className="small-break" /> {t(lang, "heading.line2")}</> : t(lang, titleKey[view])}</h1><p>{t(lang, view === "workspace" ? "heading.sub" : "heading.resultSub")}</p></div>
+          {result?.scope.timeframe?.label ? <span className="date-label"><Clock3 size={14} /> {result.scope.timeframe.label}<small>{t(lang, "date.period")}</small></span> : today && <span className="date-label"><Clock3 size={14} /> {today}<small>{t(lang, "date.today")}</small></span>}</div>
+        {offline
+          ? <div className="offline-banner" role="status"><PowerOff size={15} /><span>{t(lang, "note.offline")}</span></div>
+          : <div className="demo-note"><ShieldCheck size={14} /><span>{result
+            ? t(lang, "note.result", { source: t(lang, result.data_source === "mock" ? "note.sourceMock" : "note.sourceSectors"), llm: result.llm_provider !== "none" ? t(lang, "note.withLlm") : "" })
+            : status === null ? t(lang, "note.connecting") : status.live && status.dataSource === "mock" ? t(lang, "note.mock") : t(lang, "note.live")}</span></div>}
         {view === "workspace" ? <section className="research-box" aria-labelledby="research-title">
-          <div className="research-box-top"><span className="label-with-icon" id="research-title"><Sparkles size={17} /> Mulai dari sebuah pertanyaan</span><span className="muted mini">AGENT WORKSPACE</span></div>
-          <div className="intent-tabs" role="group" aria-label="Jenis riset">{([{ id: "discovery", title: "Pantau disclosure", icon: Layers3 }, { id: "peers", title: "Bandingkan bank", icon: BarChart3 }, { id: "company", title: "Analisis emiten", icon: Search }] as const).map(t => <button key={t.id} className={intent === t.id ? "selected" : ""} aria-pressed={intent === t.id} onClick={() => { setIntent(t.id); setQuery(""); setError(""); }}><t.icon size={14} />{t.title}</button>)}</div>
-          <label className="sr-only" htmlFor="query">Pertanyaan riset</label><textarea id="query" ref={queryRef} value={query} onChange={e => setQuery(e.target.value)} placeholder={prompts[intent]} maxLength={500} />
-          <div className="query-footer"><div className="query-context"><span><Target size={13} /> {watchlist.length} bank dipilih</span>{live ? <span><Clock3 size={13} /> Periode dibaca dari pertanyaan</span> : <label className="period-select"><Clock3 size={13} /><select aria-label="Periode riset" value={period} onChange={e => setPeriod(e.target.value)}><option>Minggu depan</option><option>Minggu ini</option><option>Bulan ini</option></select></label>}</div><button className="primary-button" onClick={research} disabled={busy}>{busy ? <LoaderCircle size={15} className="spin" /> : <Sparkles size={15} />}{busy ? (live ? "Agent sedang meneliti…" : "Menyiapkan contoh…") : (live ? "Jalankan riset" : "Lihat contoh riset")}<ArrowRight size={16} /></button></div>
+          <div className="research-box-top"><span className="label-with-icon" id="research-title"><Sparkles size={17} /> {t(lang, "box.title")}</span><span className="muted mini">{t(lang, "box.tag")}</span></div>
+          <div className="intent-row"><div className="intent-tabs" role="group" aria-label={t(lang, "box.types")}>{RESULT_VIEWS.map(id => { const Icon = intentIcon[id]; return <button key={id} className={detected === id ? "selected" : ""} aria-pressed={detected === id} onClick={() => ask(t(lang, exampleKey[id]))}><Icon size={14} />{t(lang, `intent.${id}`)}</button>; })}</div>
+            <span className="intent-hint">{detected ? <><Check size={11} /> {t(lang, "box.detected")}</> : t(lang, "box.typeHint")}</span></div>
+          <label className="sr-only" htmlFor="query">{t(lang, "box.label")}</label><textarea id="query" ref={queryRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !busy && !offline) void research(); }} placeholder={t(lang, "example.discovery")} maxLength={500} disabled={offline} />
+          <div className="query-footer"><div className="query-context"><span><Target size={13} /> {query.trim() && !scoped.length ? t(lang, "box.scopeQuery") : t(lang, "box.scopeWatchlist", { n: watchlist.length })}</span><span><Clock3 size={13} /> {t(lang, "box.period")}</span></div>
+            <button className="primary-button" onClick={() => void research()} disabled={busy || offline || status === null}>{busy ? <LoaderCircle size={15} className="spin" /> : offline ? <PowerOff size={15} /> : <Sparkles size={15} />}{busy ? t(lang, "box.busy", { s: elapsed }) : offline ? t(lang, "box.offline") : t(lang, "box.run")}<ArrowRight size={16} /></button></div>
           {error && <p className="form-error" role="alert">{error}</p>}
-        </section> : <section className="result-query"><span className="query-orb"><Sparkles size={19} /></span><div><span className="eyebrow">PERTANYAAN RISET</span><p>{showLive ? result.query : query || prompts[intent]}</p><div className="muted mini">{showLive ? (result.response.scope.companies.join(" · ") || watchlist.join(" · ")) : watchlist.join(" · ")} <span className="dot-separator">/</span> {showLive ? result.response.scope.timeframe?.label ?? "Periode terbaru" : view === "discovery" ? period : "Periode sesuai metrik"}</div></div><button className="secondary-button" onClick={() => setView("workspace")}><ArrowLeft size={14} /> Ubah</button></section>}
+        </section> : entry && <section className="result-query"><span className="query-orb"><Sparkles size={19} /></span><div><span className="eyebrow">{t(lang, "result.question")}</span><p>{entry.query}</p><div className="muted mini">{result?.scope.companies.join(" · ") || "—"} <span className="dot-separator">/</span> {t(lang, "result.asked", { time: askedAt(entry.askedAt) })}</div></div><button className="secondary-button" onClick={() => ask(entry.query)}><ArrowLeft size={14} /> {t(lang, "result.edit")}</button></section>}
         <div className="content-grid"><div className="primary-column">
-          {view === "workspace" && <div className="suggestions"><span className="muted mini">COBA PERTANYAAN</span><button onClick={() => { setIntent("discovery"); setQuery(prompts.discovery); queryRef.current?.focus(); }}>Apa agenda bank minggu depan? <ArrowUpRight size={13} /></button><button onClick={() => { setIntent("peers"); setQuery(prompts.peers); queryRef.current?.focus(); }}>Bandingkan profitabilitas bank <ArrowUpRight size={13} /></button></div>}
-          {showLive && <LiveResult result={result.response} metricLabels={status.live ? status.metrics : {}} metricDirections={status.live ? status.directions : {}} onEvidence={setLiveDrawer} onTrace={() => setTrace(true)} />}
-          {!showLive && <>
-          {view === "discovery" && <section className="briefing panel"><div className="section-header"><h2><Sparkles size={17} /> Yang perlu diperhatikan</h2><span className="status-pill">Contoh briefing</span></div><p>Ada <strong>{shownEvents.length} kejadian</strong> dalam watchlist yang ditampilkan pada contoh ini. Perubahan kepemilikan, dividen, dan agenda tata kelola memiliki alasan relevansi yang berbeda.</p><div className="briefing-bottom"><span><ShieldCheck size={14} /> Bukti ditampilkan per temuan</span><button className="text-button" onClick={() => setTrace(true)}>Lihat proses riset <ArrowRight size={14} /></button></div></section>}
-          {view === "company" && <section className="company-banner panel"><div className="company-identity"><BankMark bank={selectedCompany} /><div><h2>{names[selectedCompany]}</h2><span className="muted">{selectedCompany}.JK · Perbankan</span></div></div><select className="metric-select" aria-label="Pilih emiten" value={selectedCompany} onChange={e => setSelectedCompany(e.target.value as Bank)}>{banks.map(b => <option key={b}>{b}</option>)}</select></section>}
-          {view !== "discovery" && <section className="panel chart-panel"><div className="section-header"><div><span className="eyebrow">{view === "company" ? "PERKEMBANGAN EMITEN" : "PEER LENS"}</span><h2>{metric === "roe" ? "Profitabilitas dalam perspektif" : "Perkembangan pertumbuhan laba"}</h2></div><label className="sr-only" htmlFor="metric">Metrik grafik</label><select id="metric" className="metric-select" value={metric} onChange={e => setMetric(e.target.value as Metric)}><option value="roe">Return on equity</option><option value="growth">Pertumbuhan laba</option></select></div>
-            <div className="chart-meta"><span>{metric === "roe" ? "ROE · tahunan · %" : "Pertumbuhan laba YoY · kuartalan · %"}</span><span>{metric === "roe" ? "2021 — 2025" : "Q2 2025 — Q2 2026"}</span></div>
-            <ChartLineDefault metric={metric} banks={view === "company" ? [selectedCompany] : visibleBanks.filter(b => watchlist.includes(b))} />
-            <div className="chart-footer"><div className="chart-legend">{(view === "company" ? [selectedCompany] : watchlist).map(bank => <button key={bank} aria-pressed={view === "company" || visibleBanks.includes(bank)} onClick={() => { if (view !== "company") toggleSeries(bank); }} style={{ opacity: view === "company" || visibleBanks.includes(bank) ? 1 : .4 }}><span style={{ background: bankColors[bank] }} />{bank}</button>)}</div><span className="muted mini">Data ilustrasi</span></div>
-            {view === "workspace" && <button className="chart-link" onClick={() => navigate("peers")}>Buka perbandingan lengkap <ArrowUpRight size={14} /></button>}
-          </section>}
-          {view === "peers" && <section className="panel peer-panel"><div className="section-header"><div><span className="eyebrow">PERBANDINGAN METRIK</span><h2>Satu periode, konteks yang sebanding</h2></div><span className="status-pill"><Check size={12} /> Periode sejajar</span></div><div className="table-scroll"><table><caption className="sr-only">Perbandingan ilustratif. Klik angka untuk detail. Rasio tahunan 2025; pertumbuhan laba Q2 2026.</caption><thead><tr><th>Bank</th><th>ROE<br /><small>2025</small></th><th>ROA<br /><small>2025</small></th><th>Cost/income<br /><small>2025</small></th><th>Laba YoY<br /><small>Q2 2026</small></th></tr></thead><tbody>{watchlist.map(bank => <tr key={bank}><th><span className="table-bank"><BankMark bank={bank} />{bank}</span></th>{figures[bank].map((n, i) => <td key={i}><button onClick={() => evidence(bank, i)} aria-label={`Lihat bukti ${["ROE", "ROA", "Cost-to-income", "laba YoY"][i]} ${bank}`}>{format(n)}<ArrowUpRight size={11} /></button></td>)}</tr>)}</tbody></table></div><div className="panel-footnote">Klik angka untuk menelusuri bukti. Nilai lebih tinggi tidak selalu berarti lebih baik.</div></section>}
-          {view === "company" && <div className="metric-cards">{["ROE · 2025", "ROA · 2025", "Laba YoY · Q2 2026"].map((title, i) => <button className="panel metric-card" key={title} onClick={() => evidence(selectedCompany, i === 2 ? 3 : i)}><span className="muted mini">{title}</span><strong>{format(figures[selectedCompany][i === 2 ? 3 : i])}</strong><span>Lihat bukti <ArrowUpRight size={12} /></span></button>)}</div>}
-          {view !== "peers" && <section className="panel events-panel"><div className="section-header"><div><span className="eyebrow">DISCLOSURE RADAR</span><h2>{view === "company" ? "Kejadian terkait" : "Dalam pantauan minggu ini"}</h2></div><span className="small-counter">{(view === "company" ? shownEvents.filter(e => e.ticker === selectedCompany) : shownEvents).length} kejadian</span></div><div className="event-filters"><ListFilter size={14} />{["Semua", "Kepemilikan", "Dividen", "RUPS"].map(t => <button key={t} className={filter === t ? "selected" : ""} aria-pressed={filter === t} onClick={() => setFilter(t)}>{t}</button>)}</div>
-            {(view === "company" ? shownEvents.filter(e => e.ticker === selectedCompany) : shownEvents).map(ev => <button className="event-row" key={`${ev.ticker}-${ev.type}-${ev.day}`} onClick={() => setDrawer({ title: ev.title, ticker: ev.ticker, period: `${ev.day} ${ev.month} 2026`, detail: ev.text })}><span className="event-date"><strong>{ev.day}</strong><small>{ev.month}</small></span><span className="event-content"><span className="event-labels"><b>{ev.ticker}</b><span>{ev.type}</span></span><strong>{ev.title}</strong><span className="relevance"><span className={ev.score.includes("sedang") ? "tiny-dot amber" : "tiny-dot"} />{ev.score} <span className="muted">· Contoh</span></span></span><ArrowUpRight size={16} /></button>)}
-            {(view === "company" ? shownEvents.filter(e => e.ticker === selectedCompany) : shownEvents).length === 0 && <div className="empty-state"><Search size={22} /><h3>Tidak ada contoh kejadian</h3><p>Coba filter lain atau tambahkan bank ke watchlist. Hasil kosong tidak berarti tidak ada dampak.</p><button className="text-button" onClick={() => setFilter("Semua")}>Reset filter</button></div>}
-            <div className="panel-footnote"><Clock3 size={12} /> Contoh periode 28 Sep — 4 Okt 2026 · Bukan kalender pasar aktual</div>
-          </section>}
-          {view !== "workspace" && <section className="data-note"><CircleHelp size={17} /><div><strong>Ketahui batas datanya</strong><p>Grafik, tanggal, dan angka di prototipe ini adalah ilustrasi. Jadwal laporan mendatang dan data yang tidak tersedia akan ditandai sebagai keterbatasan, bukan diperkirakan.</p></div></section>}
+          {view === "workspace" && <>
+            <div className="suggestions"><span className="muted mini">{t(lang, "suggest.label")}</span>{RESULT_VIEWS.map(id => <button key={id} onClick={() => ask(t(lang, exampleKey[id]))}>{t(lang, shortExampleKey[id])} <ArrowUpRight size={13} /></button>)}</div>
+            {history.length > 0 && <section className="panel recent-panel"><div className="section-header"><div><span className="eyebrow"><History size={11} /> {t(lang, "history.saved").toUpperCase()}</span><h2>{t(lang, "recent.title")}</h2></div><span className="small-counter">{history.length}</span></div>
+              <ul className="recent-list">{history.slice(0, 6).map(e => { const Icon = intentIcon[e.view]; return <li key={e.id}><button onClick={() => openEntry(e)}><span className="recent-icon"><Icon size={14} /></span><span className="recent-text"><strong>{e.query}</strong><small>{t(lang, titleKey[e.view])} · {askedAt(e.askedAt)} · {t(lang, `live.status.${e.response.status}`)}</small></span><ArrowUpRight size={14} /></button></li>; })}</ul></section>}
           </>}
+          {view !== "workspace" && (result
+            ? <LiveResult key={entry?.id} result={result} metrics={metrics} colorOrder={order} onEvidence={setEvidence} onTrace={() => setTrace(true)} />
+            : <section className="panel"><div className="empty-state"><Search size={22} /><h3>{t(lang, "empty.title", { type: t(lang, titleKey[view]).toLowerCase() })}</h3><p>{t(lang, "empty.text")}</p><button className="secondary-button" onClick={() => ask(t(lang, exampleKey[view]))}>{t(lang, "empty.example")} <ArrowRight size={14} /></button></div></section>)}
         </div>
-        <aside className="context-column"><section className="panel watchlist-panel"><div className="section-header"><h2>Watchlist kamu <span className="count">{watchlist.length}</span></h2><button className="icon-button" aria-label="Kelola watchlist" onClick={() => setAddBank(true)}><Plus size={17} /></button></div><div className="watchlist-label"><span>EMITEN</span><span>{live ? (liveRoe?.period ? `ROE ${periodLabel(liveRoe.period)}` : "ROE") : "ROE 2025"}</span></div>{watchlist.map(bank => <div className="watchlist-row" key={bank}><button className="watchlist-identity" onClick={() => { setSelectedCompany(bank); navigate("company"); }}><BankMark bank={bank} /><span><strong>{bank}</strong><small>{names[bank]}</small></span></button>{live ? <span className="watchlist-value" title={liveRoe?.values[bank] === undefined ? "Jalankan perbandingan untuk melihat ROE" : undefined}>{liveRoe?.values[bank] === undefined ? "—" : formatPercent(liveRoe.values[bank])}</span> : <button className="watchlist-value" onClick={() => evidence(bank, 0)}>{format(figures[bank][0])}<ArrowUpRight size={11} /></button>}</div>)}{!watchlist.length && <p className="empty-watchlist">Tambahkan bank untuk memulai riset.</p>}<button className="add-watchlist" onClick={() => setAddBank(true)}><Plus size={14} /> Kelola watchlist</button><p className="watchlist-caption">{live ? "Dari hasil riset terakhir · bukan harga saham" : "Angka ilustrasi · bukan harga saham"}</p></section>
-          <section className="agent-card"><div className="agent-icon"><Sparkles size={21} /></div><span className="eyebrow">RISET DENGAN ARAH</span><h2>Dari kejadian,<br />ke pemahaman.</h2><p>Agent memilih konteks yang perlu diteliti, lalu menghubungkan setiap temuan dengan buktinya.</p><div className="agent-steps"><span><Search size={13} /> Temukan</span><ChevronRight size={12} /><span><TrendingUp size={13} /> Pahami</span><ChevronRight size={12} /><span><FileCheck2 size={13} /> Validasi</span></div><button className="text-button" onClick={() => setTrace(true)}>Jelajahi proses riset <ArrowRight size={14} /></button></section>
-          <section className="source-card"><div><span className="sectors-logo">S</span><strong>Powered by Sectors</strong><ArrowUpRight size={13} /></div><p>{live ? "Data emiten, disclosure, dan laporan keuangan diambil dari API Sectors melalui backend." : "Sumber data untuk implementasi akhir. Mode contoh ini tidak melakukan panggilan API."}</p><span><ShieldCheck size={13} /> Sumber & periode selalu terlihat</span></section>
+        <aside className="context-column"><section className="panel watchlist-panel"><div className="section-header"><h2>{t(lang, "watch.title")} <span className="count">{watchlist.length}</span></h2><button className="icon-button" aria-label={t(lang, "watch.manage")} onClick={() => setEditWatchlist(true)}><Plus size={17} /></button></div>
+          <div className="watchlist-label"><span>{t(lang, "watch.company")}</span>{roe && <span>{t(lang, "watch.roe", { period: periodLabel(roe.period) })}</span>}</div>
+          {watchlist.map(symbol => <div className="watchlist-row" key={symbol}><button className="watchlist-identity" onClick={() => ask(t(lang, "example.companyFor", { t: symbol }))} aria-label={t(lang, "watch.prepare", { t: symbol })}><TickerMark symbol={symbol} order={order} /><span><strong>{symbol}</strong><small>{symbol}.JK</small></span></button>{roe && <span className="watchlist-value">{roe.values[symbol] === undefined ? "—" : formatPercent(roe.values[symbol], lang)}</span>}</div>)}
+          {!watchlist.length && <p className="empty-watchlist">{t(lang, "watch.empty")}</p>}
+          <button className="add-watchlist" onClick={() => setEditWatchlist(true)}><Plus size={14} /> {t(lang, "watch.manage")}</button><p className="watchlist-caption">{t(lang, roe ? "watch.captionValue" : "watch.caption")}</p></section>
+          <section className="agent-card"><div className="agent-icon"><Sparkles size={21} /></div><span className="eyebrow">{t(lang, "agent.eyebrow")}</span><h2>{t(lang, "agent.title1")}<br />{t(lang, "agent.title2")}</h2><p>{t(lang, "agent.text")}</p><div className="agent-steps"><span><Search size={13} /> {t(lang, "agent.step1")}</span><ChevronRight size={12} /><span><TrendingUp size={13} /> {t(lang, "agent.step2")}</span><ChevronRight size={12} /><span><FileCheck2 size={13} /> {t(lang, "agent.step3")}</span></div><button className="text-button" onClick={() => setTrace(true)}>{t(lang, "agent.explore")} <ArrowRight size={14} /></button></section>
+          <section className="source-card"><a href="https://sectors.app/" target="_blank" rel="noopener noreferrer"><span className="sectors-logo">S</span><strong>{t(lang, "source.title")}</strong><ArrowUpRight size={13} /><span className="sr-only">{t(lang, "newTab")}</span></a><p>{t(lang, offline ? "source.offline" : "source.live")}</p><span><ShieldCheck size={13} /> {t(lang, "source.always")}</span></section>
         </aside></div>
       </main>
-      <AnimatedWaveFooter
-        activeView={view}
-        onNavigate={navigate}
-        onNewResearch={() => { navigate("workspace"); setQuery(""); queryRef.current?.focus(); }}
-        onOpenGuide={() => setHelp(true)}
-        onOpenTrace={() => setTrace(true)}
-        live={live}
-        dataLabel={status.live && status.dataSource === "mock" ? "data mock" : "data Sectors"}
-      />
+      <AnimatedWaveFooter activeView={view} onNavigate={navigate} onNewResearch={() => ask("")} onOpenGuide={() => setHelp(true)} onOpenTrace={() => setTrace(true)} lang={lang} statusLabel={statusLabel} />
     </div>
-    {overlay && <div className="overlay"><section role="dialog" aria-modal="true" aria-labelledby="drawer-title" className={`drawer ${addBank || help ? "small-dialog" : ""}`}><div className="drawer-top"><span className="eyebrow">{drawer || liveDrawer ? "EVIDENCE EXPLORER" : trace ? "AGENT TRACE" : addBank ? "WATCHLIST" : "PANDUAN"}</span><button ref={closeRef} className="icon-button" aria-label="Tutup panel" onClick={closeOverlays}><X size={19} /></button></div>
-      <h2 id="drawer-title">{drawer?.title || liveDrawer?.title || (trace ? "Setiap langkah punya alasan." : addBank ? "Pilih bank yang kamu pantau" : "Riset dimulai dari rasa ingin tahu.")}</h2>
-      {drawer && <><div className="drawer-badge"><FileCheck2 size={15} /> {drawer.ticker} · Bukti ilustratif</div>{drawer.value && <div className="evidence-value">{drawer.value}<small>{drawer.period}</small></div>}<p className="drawer-description">{drawer.detail}</p><dl className="evidence-list"><div><dt>Emiten</dt><dd>{drawer.ticker}.JK</dd></div><div><dt>Periode / tanggal</dt><dd>{drawer.period || "Contoh desain"}</dd></div><div><dt>Jenis data</dt><dd>Sintetis · pratinjau UI</dd></div><div><dt>Waktu request API</dt><dd>Belum ada request</dd></div><div><dt>Sumber aktual</dt><dd>Belum terhubung</dd></div>{drawer.field && <div><dt>Field yang direncanakan</dt><dd><code>{drawer.field}</code></dd></div>}</dl><div className="data-note"><ShieldCheck size={18} /><p>Saat terhubung, hanya sumber yang benar-benar tersedia dalam respons backend yang akan ditampilkan.</p></div><button className="secondary-button full-width" onClick={() => { setDrawer(null); navigate("company"); setSelectedCompany(drawer.ticker as Bank); }}>Lihat konteks emiten <ArrowRight size={15} /></button></>}
-      {liveDrawer && <><div className="drawer-badge"><FileCheck2 size={15} /> {liveDrawer.ticker}{liveDrawer.period ? ` · ${liveDrawer.period}` : ""}</div>
-        {liveDrawer.reasons?.length ? <><p className="drawer-description">Alasan relevansi (aturan deterministik):</p><ul className="reason-list">{liveDrawer.reasons.map(r => <li key={r}>{r}</li>)}</ul></> : null}
-        {liveDrawer.secondHop && <p className="drawer-description">Riset lanjutan: {secondHopLabel(liveDrawer.secondHop)}</p>}
-        {liveDrawer.items.length === 0 && <p className="drawer-description">Temuan ini tidak merujuk data angka tambahan.</p>}
-        {liveDrawer.items.map(item => <dl className="evidence-list" key={item.evidence_id}>
-          <div><dt>Nilai</dt><dd>{formatEvidenceValue(item)}</dd></div>
-          <div><dt>Emiten</dt><dd>{item.symbol ? `${item.symbol}.JK` : "—"}</dd></div>
-          <div><dt>Periode / tanggal</dt><dd>{periodLabel(item.period)}</dd></div>
-          <div><dt>Field</dt><dd><code>{item.field}</code></dd></div>
-          <div><dt>Endpoint Sectors</dt><dd>{item.tool}</dd></div>
-          <div><dt>Sumber</dt><dd>{isUrl(item.source_ref) ? <a className="source-link" href={item.source_ref} target="_blank" rel="noopener noreferrer">Buka dokumen <ArrowUpRight size={11} /><span className="sr-only"> (buka tab baru)</span></a> : <code>{item.source_ref}</code>}</dd></div>
-          <div><dt>ID bukti</dt><dd>{item.evidence_id}</dd></div>
-          {item.note && <div><dt>Catatan</dt><dd>{item.note}</dd></div>}
+    {overlay && <div className="overlay"><section role="dialog" aria-modal="true" aria-labelledby="drawer-title" className={`drawer ${editWatchlist || help ? "small-dialog" : ""}`}><div className="drawer-top"><span className="eyebrow">{t(lang, evidence ? "drawer.evidence" : trace ? "drawer.trace" : editWatchlist ? "drawer.watchlist" : "drawer.guide")}</span><button ref={closeRef} className="icon-button" aria-label={t(lang, "drawer.close")} onClick={closeOverlays}><X size={19} /></button></div>
+      <h2 id="drawer-title">{evidence?.title || t(lang, trace ? "trace.title" : editWatchlist ? "watch.dialogTitle" : "help.title")}</h2>
+      {evidence && <><div className="drawer-badge"><FileCheck2 size={15} /> {evidence.ticker}{evidence.period ? ` · ${evidence.period}` : ""}</div>
+        {evidence.reasons?.length ? <><p className="drawer-description">{t(lang, "evidence.reasons")}</p><ul className="reason-list">{evidence.reasons.map(r => <li key={r}>{r}</li>)}</ul></> : null}
+        {evidence.secondHop && <p className="drawer-description">{t(lang, "evidence.secondHop", { x: secondHopLabel(evidence.secondHop, lang) ?? "" })}</p>}
+        {evidence.items.length === 0 && <p className="drawer-description">{t(lang, "evidence.none")}</p>}
+        {evidence.items.map(item => <dl className="evidence-list" key={item.evidence_id}>
+          <div><dt>{t(lang, "evidence.value")}</dt><dd>{formatEvidenceValue(item, lang)}</dd></div>
+          <div><dt>{t(lang, "evidence.company")}</dt><dd>{item.symbol ? `${item.symbol}.JK` : "—"}</dd></div>
+          <div><dt>{t(lang, "evidence.period")}</dt><dd>{periodLabel(item.period)}</dd></div>
+          <div><dt>{t(lang, "evidence.field")}</dt><dd><code>{item.field}</code></dd></div>
+          <div><dt>{t(lang, "evidence.endpoint")}</dt><dd>{item.tool}</dd></div>
+          <div><dt>{t(lang, "evidence.source")}</dt><dd>{isUrl(item.source_ref) ? <a className="source-link" href={item.source_ref} target="_blank" rel="noopener noreferrer">{t(lang, "evidence.openDoc")} <ArrowUpRight size={11} /><span className="sr-only">{t(lang, "newTab")}</span></a> : <code>{item.source_ref}</code>}</dd></div>
+          <div><dt>{t(lang, "evidence.id")}</dt><dd>{item.evidence_id}</dd></div>
+          {item.note && <div><dt>{t(lang, "evidence.note")}</dt><dd>{item.note}</dd></div>}
         </dl>)}
-        {liveDrawer.sourceRef && isUrl(liveDrawer.sourceRef) && !liveDrawer.items.some(i => i.source_ref === liveDrawer.sourceRef) && <a className="secondary-button full-width" href={liveDrawer.sourceRef} target="_blank" rel="noopener noreferrer">Buka dokumen sumber <ArrowUpRight size={14} /></a>}
+        {evidence.sourceRef && isUrl(evidence.sourceRef) && !evidence.items.some(i => i.source_ref === evidence.sourceRef) && <a className="secondary-button full-width" href={evidence.sourceRef} target="_blank" rel="noopener noreferrer">{t(lang, "evidence.openSource")} <ArrowUpRight size={14} /></a>}
       </>}
-      {trace && showLive && <><p className="drawer-description">Langkah yang dijalankan agent untuk pertanyaan ini ({result.response.tool_calls.length} panggilan data, {result.response.llm_provider !== "none" ? `LLM: ${result.response.llm_provider}` : "tanpa LLM"}).</p><ol className="trace-list">{result.response.trace.map((step, i) => <li key={`${step.stage}-${i}`}><span className={step.status === "ok" ? "" : "trace-warn"}>{String(i + 1).padStart(2, "0")}</span><div><h3>{step.stage}</h3><p>{step.detail || step.status}</p></div></li>)}</ol></>}
-      {trace && !showLive && <><p className="drawer-description">Contoh alur agent. Ini bukan rekaman eksekusi langsung.</p><ol className="trace-list">{[["Pahami pertanyaan", "Identifikasi bank, periode, dan tujuan riset."], ["Pilih sumber yang relevan", "Ambil filings dan aksi korporasi sesuai cakupan."], ["Nilai relevansi", "Hilangkan duplikasi dan jelaskan prioritas kejadian."], ["Teliti konteks tambahan", "Ambil metrik keuangan ketika konteks diperlukan."], ["Validasi bukti", "Periksa sumber, periode, satuan, dan konflik data."], ["Susun briefing", "Sampaikan temuan beserta batas datanya."]].map(([title, detail], i) => <li key={title}><span>{String(i + 1).padStart(2, "0")}</span><div><h3>{title}</h3><p>{detail}</p></div></li>)}</ol></>}
-      {addBank && <><p className="drawer-description">Pilih hingga empat bank untuk menjelajahi contoh desain.</p><div className="bank-options">{banks.map(bank => <button key={bank} aria-pressed={watchlist.includes(bank)} onClick={() => setWatchlist(prev => prev.includes(bank) ? prev.filter(b => b !== bank) : [...prev, bank])}><BankMark bank={bank} /><span><strong>{bank}</strong><small>{names[bank]}</small></span><span className={`checkbox ${watchlist.includes(bank) ? "checked" : ""}`}>{watchlist.includes(bank) && <Check size={13} />}</span></button>)}</div><button className="primary-button full-width" onClick={() => setAddBank(false)}>Selesai · {watchlist.length} bank <Check size={15} /></button></>}
-      {help && <><p className="drawer-description">Pilih jenis riset, tentukan bank, lalu tulis pertanyaan. {live ? "Agent memilih jenis riset dari pertanyaanmu." : "Prototipe ini menyediakan tiga contoh tampilan hasil."}</p><div className="help-items"><p><strong>01 · Disclosure</strong>Temukan kejadian dan alasan relevansinya.</p><p><strong>02 · Peer lens</strong>Bandingkan metrik pada periode yang sebanding.</p><p><strong>03 · Konteks emiten</strong>Lihat tren dan kejadian satu perusahaan.</p></div><div className="data-note"><FlaskConical size={17} /><p>{live ? "Setiap riset memanggil API Sectors melalui backend. Semua temuan disertai bukti; data yang tidak tersedia ditandai sebagai keterbatasan." : "Semua contoh bersifat ilustratif. Tidak ada API key, panggilan Sectors, atau kredit yang digunakan."}</p></div></>}
+      {trace && result && <><p className="drawer-description">{t(lang, "trace.live", { n: result.tool_calls.length, llm: result.llm_provider !== "none" ? t(lang, "trace.llm", { p: result.llm_provider }) : t(lang, "trace.noLlm") })}</p><ol className="trace-list">{result.trace.map((step, i) => <li key={`${step.stage}-${i}`}><span className={step.status === "ok" ? "" : "trace-warn"}>{String(i + 1).padStart(2, "0")}</span><div><h3>{step.stage}</h3><p>{step.detail || step.status}</p></div></li>)}</ol></>}
+      {trace && !result && <><p className="drawer-description">{t(lang, "trace.generic")}</p><ol className="trace-list">{traceSteps.map(([title, detail], i) => <li key={title}><span>{String(i + 1).padStart(2, "0")}</span><div><h3>{t(lang, title)}</h3><p>{t(lang, detail)}</p></div></li>)}</ol></>}
+      {editWatchlist && <><p className="drawer-description">{t(lang, "watch.dialogText")}</p>
+        <form className="ticker-form" onSubmit={addTickers}><label className="sr-only" htmlFor="ticker-input">{t(lang, "watch.input")}</label><input id="ticker-input" value={tickerInput} onChange={e => { setTickerInput(e.target.value); setTickerError(""); }} placeholder={t(lang, "watch.placeholder")} autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={120} aria-invalid={!!tickerError} aria-describedby={tickerError ? "ticker-error" : undefined} /><button type="submit" className="secondary-button" disabled={!tickerInput.trim()}><Plus size={14} /> {t(lang, "watch.add")}</button></form>
+        {tickerError && <p className="form-error" id="ticker-error" role="alert">{tickerError}</p>}
+        <ul className="ticker-list">{watchlist.map(symbol => <li key={symbol}><TickerMark symbol={symbol} order={order} /><strong>{symbol}</strong><button className="icon-button" aria-label={t(lang, "watch.remove", { t: symbol })} onClick={() => setWatchlist(prev => prev.filter(s => s !== symbol))}><X size={15} /></button></li>)}</ul>
+        <p className="watch-note">{t(lang, "watch.note")}</p>
+        <button className="primary-button full-width" onClick={closeOverlays}>{t(lang, "watch.done", { n: watchlist.length })} <Check size={15} /></button></>}
+      {help && <><p className="drawer-description">{t(lang, "help.text")}</p><div className="help-items"><p><strong>{t(lang, "help.i1")}</strong>{t(lang, "help.i1d")}</p><p><strong>{t(lang, "help.i2")}</strong>{t(lang, "help.i2d")}</p><p><strong>{t(lang, "help.i3")}</strong>{t(lang, "help.i3d")}</p></div><div className="data-note"><ShieldCheck size={17} /><p>{t(lang, "help.note")}</p></div></>}
     </section></div>}
   </div>;
 }

@@ -21,7 +21,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch {
     return fail("invalid_request");
   }
-  const { query, watchlist } = (body ?? {}) as { query?: unknown; watchlist?: unknown };
+  const { query, watchlist, language } = (body ?? {}) as { query?: unknown; watchlist?: unknown; language?: unknown };
   if (typeof query !== "string" || query.trim().length < 3 || query.length > 500) {
     return fail("invalid_request");
   }
@@ -29,6 +29,7 @@ export async function POST(request: Request): Promise<Response> {
   if (tickers.length > 20 || !tickers.every(t => typeof t === "string" && TICKER.test(t))) {
     return fail("invalid_request");
   }
+  if (language !== undefined && language !== "id" && language !== "en") return fail("invalid_request");
 
   const timeoutMs = Number(process.env.AGENT_TIMEOUT_MS) || 110_000;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -39,8 +40,8 @@ export async function POST(request: Request): Promise<Response> {
     const response = await backendFetch("/v1/agent/query", {
       method: "POST",
       headers,
-      // The UI is Indonesian; the backend returns the briefing in the requested language.
-      body: JSON.stringify({ query: query.trim(), watchlist: tickers, language: "id" }),
+      // The briefing follows the interface language the visitor chose (Indonesian by default).
+      body: JSON.stringify({ query: query.trim(), watchlist: tickers, language: language ?? "id" }),
     }, timeoutMs);
     if (!response.ok) return fail(errorForBackend(response.status, await response.json().catch(() => null)));
     return Response.json(await response.json());
