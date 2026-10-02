@@ -11,8 +11,8 @@ from idx_insight.analytics.numbers import (
     fmt_pct,
     fmt_pp,
     fmt_share_pct,
-    normalize_ratio,
     pct_change,
+    ratio_series_unit,
     robust_outliers,
     safe_div,
     spread,
@@ -41,10 +41,11 @@ def test_spread_and_safe_div():
     assert safe_div(985, 1290) == pytest.approx(0.7636, rel=1e-3)
 
 
-def test_normalize_ratio_detects_percent_units():
-    assert normalize_ratio(13.8) == (pytest.approx(0.138), True)
-    assert normalize_ratio(0.235) == (0.235, False)
-    assert normalize_ratio(None) == (None, False)
+def test_ratio_series_unit_is_decided_for_the_whole_series():
+    assert ratio_series_unit([13.8, 14.1, None]) == "percent"
+    assert ratio_series_unit([0.235, 0.24]) == "fraction"
+    assert ratio_series_unit([1.86, 1.16, 0.99, 1.89]) == "mixed"
+    assert ratio_series_unit([None]) == "fraction"
 
 
 def test_robust_outliers_needs_enough_peers():
