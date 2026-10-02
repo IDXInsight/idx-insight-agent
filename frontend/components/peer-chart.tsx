@@ -1,56 +1,78 @@
 "use client";
 
-import { useId, useState } from "react";
-import { type PeerMetric, formatPercent, periodLabel } from "@/lib/agent";
+import { type PeerMetric, type MetricDirection, formatPercent, periodLabel } from "@/lib/agent";
 
-const colors = ["#9edab5", "#a3b8ef", "#dac28a", "#b7a3d9"];
+// Categorical slots validated for the dark surface (#191e1a): lightness band, chroma,
+// colour-blind and normal-vision separation, 3:1 contrast. Assigned by entity, never by rank.
+export const seriesColors = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+const overflowColor = "#7d8a81";
 
-export default function PeerChart({ metrics, labels, onEvidence }: {
+export function colorFor(symbol: string, symbols: string[]): string {
+  const index = symbols.indexOf(symbol);
+  return index >= 0 && index < seriesColors.length ? seriesColors[index] : overflowColor;
+}
+
+type Props = {
   metrics: PeerMetric[];
+  symbols: string[];
   labels: Record<string, string>;
+  directions: Record<string, MetricDirection>;
   onEvidence: (metric: string, symbol: string) => void;
+};
+
+/** Small multiples: one column chart per metric, each on its own scale, with the peer median. */
+export default function PeerChart({ metrics, symbols, labels, directions, onEvidence }: Props) {
+  if (!metrics.length) return null;
+  return <section className="panel live-peer-chart" aria-labelledby="peer-chart-title">
+    <div className="section-header">
+      <div><span className="eyebrow">GRAFIK PERBANDINGAN</span><h2 id="peer-chart-title">Satu grafik per metrik</h2></div>
+      <ul className="chart-legend" aria-label="Warna emiten">{symbols.map(symbol => <li key={symbol}><span style={{ background: colorFor(symbol, symbols) }} />{symbol}</li>)}</ul>
+    </div>
+    <p className="chart-howto">Setiap grafik memakai skalanya sendiri dan diurutkan dari nilai yang umumnya lebih baik. Garis putus-putus adalah median peer. Arahkan kursor atau klik kolom untuk melihat nilai dan buktinya.</p>
+    <div className="small-multiples">
+      {metrics.map(metric => <MetricColumns key={metric.metric} metric={metric} symbols={symbols} label={labels[metric.metric] ?? metric.metric} direction={directions[metric.metric] ?? null} onEvidence={onEvidence} />)}
+    </div>
+  </section>;
+}
+
+function MetricColumns({ metric, symbols, label, direction, onEvidence }: {
+  metric: PeerMetric; symbols: string[]; label: string; direction: MetricDirection; onEvidence: Props["onEvidence"];
 }) {
-  const id = useId();
-  const [selected, setSelected] = useState("roe");
-  const metric = metrics.find(m => m.metric === selected) ?? metrics[0];
-  if (!metric) return null;
-  const rows = Object.entries(metric.values).filter(([, value]) => Number.isFinite(value));
-  const symbols = [...new Set([...rows.map(([symbol]) => symbol), ...metric.missing])];
-  const values = rows.map(([, value]) => value);
+  const available = Object.entries(metric.values).filter(([, value]) => Number.isFinite(value));
+  const sorted = [...available].sort(([, a], [, b]) => direction === "lower" ? a - b : b - a);
+  const missing = symbols.filter(s => !available.some(([symbol]) => symbol === s));
+  const values = available.map(([, v]) => v);
   const min = Math.min(0, ...values);
   const max = Math.max(0, ...values);
-  const span = max - min || 1;
-  const position = (value: number) => (value - min) / span * 100;
-  const label = (name: string) => labels[name] ?? (name === "cost_to_income_ratio" ? "Cost-to-income" : name);
+  const range = max - min || 1;
+  // Headroom so the tallest column never touches the frame.
+  const hi = max + range * 0.08;
+  const lo = min < 0 ? min - range * 0.08 : 0;
+  const span = hi - lo;
+  const y = (value: number) => (hi - value) / span * 100;
+  const median = metric.median !== null && Number.isFinite(metric.median) ? metric.median : null;
+  const hint = direction === "higher" ? "↑ umumnya lebih baik" : direction === "lower" ? "↓ umumnya lebih baik" : "tanpa arah tunggal";
 
-  return <section className="panel live-peer-chart" aria-labelledby={`${id}-title`}>
-    <div className="section-header">
-      <div><span className="eyebrow">GRAFIK PERBANDINGAN</span><h2 id={`${id}-title`}>{label(metric.metric)} antar emiten</h2></div>
-      <label className="sr-only" htmlFor={`${id}-metric`}>Metrik grafik perbandingan</label>
-      <select id={`${id}-metric`} className="metric-select" value={metric.metric} onChange={e => setSelected(e.target.value)}>
-        {metrics.map(m => <option key={m.metric} value={m.metric}>{label(m.metric)}</option>)}
-      </select>
-    </div>
-    <div className="chart-meta"><span>{metric.period ? periodLabel(metric.period) : "Periode berbeda per emiten"} · %</span><span>{symbols.length} emiten</span></div>
-    <div className="peer-bars">
-      {symbols.map((symbol, index) => {
-        const value = metric.values[symbol];
-        const available = Number.isFinite(value);
+  return <figure className="sm-card">
+    <figcaption><strong>{label}</strong><span>{metric.period ? periodLabel(metric.period) : "Periode berbeda"} · {hint}{median !== null && <> · <i className="sm-median-key" aria-hidden="true" /> median {formatPercent(median)}</>}</span></figcaption>
+    <div className="sm-plot" role="group" aria-label={`${label}, ${available.length} emiten`}>
+      <span className="sm-zero" style={{ top: `${y(0)}%` }} aria-hidden="true" />
+      {median !== null && <span className="sm-median" style={{ top: `${y(median)}%` }} aria-hidden="true" />}
+      {sorted.map(([symbol, value]) => {
         const period = metric.period ?? metric.periods[symbol];
-        return <button key={symbol} className="peer-bar-row" disabled={!available}
-          aria-label={`${symbol}, ${label(metric.metric)} ${available ? formatPercent(value) : "tidak tersedia"}, ${periodLabel(period)}${available ? ". Lihat bukti" : ""}`}
-          onClick={() => onEvidence(metric.metric, symbol)}>
-          <span className="peer-bar-symbol">{symbol}{!metric.aligned && <small>{periodLabel(period)}</small>}</span>
-          <span className="peer-bar-track" aria-hidden="true">
-            <span className="peer-bar-zero" style={{ left: `${position(0)}%` }} />
-            {available && <span className="peer-bar-fill" style={{ left: `${position(Math.min(0, value))}%`, width: `${Math.abs(value) / span * 100}%`, background: colors[index % colors.length] }} />}
-          </span>
-          <span className="peer-bar-value">{available ? formatPercent(value) : "—"}</span>
+        const vsMedian = median === null ? "" : value > median ? "di atas median" : value < median ? "di bawah median" : "sama dengan median";
+        return <button key={symbol} className="sm-col" onClick={() => onEvidence(metric.metric, symbol)}
+          aria-label={`${symbol}: ${label} ${formatPercent(value)}, ${periodLabel(period)}${vsMedian ? `, ${vsMedian}` : ""}. Lihat bukti`}>
+          <span className="sm-bar" aria-hidden="true" style={{ top: `${y(Math.max(0, value))}%`, height: `${Math.abs(value) / span * 100}%`, background: colorFor(symbol, symbols) }} />
+          <span className="sm-tip" aria-hidden="true"><b>{symbol}</b>{formatPercent(value)}<small>{periodLabel(period)}{vsMedian ? ` · ${vsMedian}` : ""}{metric.outliers.includes(symbol) ? " · outlier" : ""}</small></span>
         </button>;
       })}
-      {rows.length > 0 && <div className="peer-bar-axis" aria-hidden="true"><span>{formatPercent(min)}</span><span>{formatPercent(max)}</span></div>}
-      {rows.length === 0 && <p className="muted">Belum ada nilai yang tersedia untuk metrik ini.</p>}
+      {missing.map(symbol => <span key={symbol} className="sm-col sm-missing" title="Tidak tersedia atau dikeluarkan dari perbandingan" aria-label={`${symbol}: tidak tersedia`} />)}
+      {!available.length && <p className="sm-empty">Belum ada nilai untuk metrik ini.</p>}
     </div>
-    <div className="panel-footnote">Klik batang untuk melihat bukti. Setiap metrik memakai skalanya sendiri; nilai lebih tinggi tidak selalu lebih baik.</div>
-  </section>;
+    <div className="sm-axis" aria-hidden="true">
+      {sorted.map(([symbol, value]) => <span key={symbol}><b>{symbol}</b>{formatPercent(value)}</span>)}
+      {missing.map(symbol => <span key={symbol}><b>{symbol}</b>—</span>)}
+    </div>
+  </figure>;
 }
