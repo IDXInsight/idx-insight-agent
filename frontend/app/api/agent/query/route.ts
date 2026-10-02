@@ -1,4 +1,5 @@
 import { backendFetch, backendUrl } from "@/lib/backend";
+import { type ProxyError, clientIp, errorForBackend, proxyStatus } from "@/lib/proxy";
 
 export const dynamic = "force-dynamic";
 // One agent run makes several Sectors calls and optional LLM calls.
@@ -6,45 +7,45 @@ export const maxDuration = 120;
 
 const TICKER = /^[A-Z]{4}$/;
 
-type ProxyError = "not_configured" | "invalid_request" | "backend_unavailable" | "timeout" | "rate_limited" | "backend_error";
-
-function fail(error: ProxyError, status: number): Response {
-  return Response.json({ error }, { status });
+function fail(error: ProxyError): Response {
+  return Response.json({ error }, { status: proxyStatus[error] });
 }
 
 /** Forwards a research question to `POST /v1/agent/query` after validating it. */
 export async function POST(request: Request): Promise<Response> {
-  if (!backendUrl()) return fail("not_configured", 503);
+  if (!backendUrl()) return fail("not_configured");
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return fail("invalid_request", 400);
+    return fail("invalid_request");
   }
   const { query, watchlist } = (body ?? {}) as { query?: unknown; watchlist?: unknown };
   if (typeof query !== "string" || query.trim().length < 3 || query.length > 500) {
-    return fail("invalid_request", 400);
+    return fail("invalid_request");
   }
   const tickers = Array.isArray(watchlist) ? watchlist : [];
   if (tickers.length > 20 || !tickers.every(t => typeof t === "string" && TICKER.test(t))) {
-    return fail("invalid_request", 400);
+    return fail("invalid_request");
   }
 
   const timeoutMs = Number(process.env.AGENT_TIMEOUT_MS) || 110_000;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  // The backend limits agent runs per visitor; it trusts this header only with the shared secret.
+  const ip = clientIp(request.headers);
+  if (ip) headers["X-Client-IP"] = ip;
   try {
     const response = await backendFetch("/v1/agent/query", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       // The UI is Indonesian; the backend returns the briefing in the requested language.
       body: JSON.stringify({ query: query.trim(), watchlist: tickers, language: "id" }),
     }, timeoutMs);
-    if (response.status === 429) return fail("rate_limited", 429);
-    if (response.status === 422) return fail("invalid_request", 400);
-    if (!response.ok) return fail("backend_error", 502);
+    if (!response.ok) return fail(errorForBackend(response.status, await response.json().catch(() => null)));
     return Response.json(await response.json());
   } catch (error) {
-    if (error instanceof DOMException && error.name === "TimeoutError") return fail("timeout", 504);
-    return fail("backend_unavailable", 502);
+    if (error instanceof DOMException && error.name === "TimeoutError") return fail("timeout");
+    return fail("backend_unavailable");
   }
 }
