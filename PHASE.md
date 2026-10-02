@@ -253,9 +253,10 @@ Next.js UI and inspect evidence and the execution trace.
 - Vercel Firewall: the backend denies requests without the internal key at the edge;
   the frontend rate-limits `/api/agent/query` to 10 requests per minute per IP
 - Verified on the deployment with two real-data questions (9 credits)
-- Still open: free-ticker watchlist (the UI offers four banks), progress while the agent
-  runs, an Indonesian/English toggle (the proxy always asks for Indonesian), a clear
-  message when the firewall answers 429, smaller components and the mobile layout
+- UI follow-ups done on 2026-10-02: free-ticker watchlist, research history,
+  research-type detection, Indonesian/English toggle, progress feedback, the firewall's
+  429 message, small-multiple peer chart, offline state instead of illustrative data,
+  mobile layout. Still open: smaller components in `frontend/app/page.tsx`
 
 ---
 
