@@ -66,7 +66,8 @@ export default function Home() {
   const order = colorOrder(watchlist, result ? [...result.scope.companies, ...Object.values(result.peer_comparison).flatMap(p => Object.keys(p.values))] : []);
   const scoped = watchlistForQuery(query, watchlist);
   const detected = guessIntent(query, watchlist);
-  const roe = result?.peer_comparison.roe;
+  // The watchlist shows ROE only when the open result has it for a watchlist company.
+  const roe = watchlist.some(symbol => result?.peer_comparison.roe?.values[symbol] !== undefined) ? result?.peer_comparison.roe : undefined;
   const statusLabel = status === null ? t(lang, "status.connecting") : !status.live ? t(lang, "status.offline") : status.dataSource === "mock" ? t(lang, "status.mock") : t(lang, "status.sectors");
 
   // Preferences and history live in this browser only; any storage failure keeps the defaults.
