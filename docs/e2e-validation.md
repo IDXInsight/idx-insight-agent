@@ -107,7 +107,7 @@ reported as malformed.
 | Invalid input to the proxy (language `fr`, ticker `XX1`, two-letter question, non-JSON body) | 400 `invalid_request`; nothing reaches the backend |
 | Direct call to the backend without the shared secret | 403 from the Vercel Firewall; with a wrong secret 401 from the API; only `/health` is public |
 | Firewall rate limit (12 quick repeats of a cached question) | Requests 11 and 12 get 429 with the firewall's own body. The page showed the generic backend error for it; fixed |
-| Daily credit cap reached (local, cap set to the day's spend) | The Sectors call is refused before it is sent (0 credits). **Open**: the visitor sees "ticker could not be verified" and a clarification question instead of a credit-limit message |
+| Daily credit cap reached (local, cap set to the day's spend) | The Sectors call is refused before it is sent (0 credits). The visitor saw "ticker could not be verified" and a clarification question; fixed: one plain credit-limit message and status insufficient evidence. Testing every call refused also exposed a crash in peer comparison (empty quarter alignment, which a Sectors outage would trigger too); fixed |
 | Backend offline | The workspace shows "Backend mati, hubungi tim untuk menyalakan lagi." and disables the research box (checked locally) |
 
 ### Findings
@@ -115,6 +115,7 @@ reported as malformed.
 | Finding | Follow-up |
 |---|---|
 | "Disclosure perbankan minggu depan" gives a thin answer this week | For the demo, use a window with more events (e.g. this month) or named companies |
-| Credit-cap refusal is reported as an unverifiable ticker | Open |
-| Real-data discovery cases expect second-hop research in every week | Open: make the expectation conditional on a relevant event above the threshold |
+| Credit-cap refusal is reported as an unverifiable ticker | Fixed: separate `credit_cap` status and message |
+| Peer comparison crashed when every data call failed | Fixed, with a test |
+| Real-data discovery cases expect second-hop research in every week | Fixed: research is required only for events at or above the threshold; replayed from the cache, 8/8 (0 credits) |
 | Not yet tested live: Groq rate-limit fallback, Redis unavailable, timeouts | Covered by unit tests only |

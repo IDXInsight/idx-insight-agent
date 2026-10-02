@@ -33,7 +33,7 @@ the deployment, about 94 in three end-to-end runs).
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
 | Security testing | Not started | Prompt-injection tests against the live LLM, Python dependency audit, GitHub secret scanning and push protection, runtime log review |
-| End-to-end validation (Phase 6) | In progress | Three runs on 2026-10-02: 11 questions (local and deployed), real-data evaluation 6/8 (two discovery cases depend on a busy week), failure cases; parser, unit and firewall-message fixes; see [docs/e2e-validation.md](docs/e2e-validation.md) |
+| End-to-end validation (Phase 6) | In progress | Three runs on 2026-10-02: 11 questions (local and deployed), real-data evaluation 6/8 live, 8/8 after making the discovery expectation depend on eligible events; failure cases; parser, unit, credit-cap, crash and firewall-message fixes; see [docs/e2e-validation.md](docs/e2e-validation.md) |
 | Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
 ## Tech Stack
@@ -624,7 +624,6 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase
 - Done: ratio-unit fix deployed and re-checked; real-data evaluation re-run (6/8, 31 credits);
   failure cases for invalid input, missing secret, firewall rate limit, credit cap, offline
 - Clarify the definition and unit of Sectors' `cost_to_income_ratio`
-- Report a reached credit cap as such (it currently reads as an unverifiable ticker)
 - Exercise every Sectors endpoint through the deployed product: sector-wide discovery
   (market-wide calendar), NPL comparison (screener), ambiguous names, unknown tickers
 - Cross-check a sample of values against the Sectors app
