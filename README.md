@@ -18,8 +18,8 @@ Every new question spends Sectors credits; repeated questions are answered from 
 
 Overall: the product works end to end on real data and is deployed; the UI still has
 gaps, and end-to-end validation, security testing and the submission materials have
-not started. Sectors credits used so far: about 98 of 1,000 (49 during Phase 4, 9 on
-the deployment, about 40 in the first local end-to-end run).
+not started. Sectors credits used so far: about 118 of 1,000 (49 during Phase 4, 9 on
+the deployment, about 40 and about 20 in the first two end-to-end runs).
 
 | Area | State | Details |
 |---|---|---|
@@ -33,7 +33,7 @@ the deployment, about 40 in the first local end-to-end run).
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
 | Security testing | Not started | Prompt-injection tests against the live LLM, Python dependency audit, GitHub secret scanning and push protection, runtime log review |
-| End-to-end validation (Phase 6) | In progress | First local real-data run on 2026-10-02: 5 questions, 4 as expected, 1 parser fix; see [docs/e2e-validation.md](docs/e2e-validation.md) |
+| End-to-end validation (Phase 6) | In progress | Two real-data runs on 2026-10-02 (local and deployed, 10 questions): parser and unit fixes, non-bank questions work; see [docs/e2e-validation.md](docs/e2e-validation.md) |
 | Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
 ## Tech Stack
@@ -598,7 +598,9 @@ To run the API and the UI, see
   (company report, quarterly financials, filings, per-company corporate actions). The
   market-wide calendar, screener (NPL), sub-sector list and report dates were verified
   live on 2026-09-27 from a local run, not yet through the deployment. Values have not
-  been cross-checked against the Sectors app.
+  been cross-checked against the Sectors app; Sectors does not document the definition
+  or unit of `cost_to_income_ratio`, and its values differ from commonly reported bank
+  cost-to-income ratios.
 - Only Indonesian and English are supported.
 - The watchlist accepts any IDX ticker, but at most 3 tickers the agent does not know
   yet are verified per question; the rest are reported as unverified.
@@ -617,12 +619,15 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase
 - A trend chart needs multi-period series in the API response
 
 **End-to-end validation (Phase 6, in progress)**
-- Done: first local real-data run, 5 questions (see [docs/e2e-validation.md](docs/e2e-validation.md))
+- Done: a local and a deployed real-data run, 10 questions including non-bank and
+  English questions (see [docs/e2e-validation.md](docs/e2e-validation.md))
+- Deploy and re-check the ratio-unit fix (cost-to-income BBCA vs BBRI)
+- Clarify the definition and unit of Sectors' `cost_to_income_ratio`
 - Re-run the 8 real-data evaluation cases (about 28–35 credits)
 - Exercise every Sectors endpoint through the deployed product: sector-wide discovery
   (market-wide calendar), NPL comparison (screener), ambiguous names, unknown tickers
 - Cross-check a sample of values against the Sectors app
-- Questions about non-bank companies and other sectors
+- Other sectors (non-bank companies by ticker work)
 - Failure cases: Groq rate limit, credit cap reached, Redis unavailable, timeouts
 - Latency and credits per question type
 - Final runtime LLM provider and model
