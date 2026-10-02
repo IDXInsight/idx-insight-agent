@@ -9,8 +9,8 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 ## Current Status
 
 **Phases 0–4 implemented: the agent runs on real Sectors data** (mock data remains
-for tests and offline development). See [PHASE.md](PHASE.md) — the project is
-currently until Phase 4.
+for tests and offline development); Phase 5 (product UI) is in progress. See
+[PHASE.md](PHASE.md) — the project is currently until Phase 5.
 
 | Area | State |
 |---|---|
@@ -22,8 +22,142 @@ currently until Phase 4.
 | Languages | Indonesian and English, following the user's language |
 | Evaluation | 17 mock cases (offline) and 8 structural real-data cases; real-data run 8/8 with Groq on 2026-09-27 |
 | Final LLM provider/model | **Not decided** |
-| Frontend (Next.js) | Not started — Phase 5 |
+| Frontend (Next.js) | In progress — workspace UI connected to the agent API through a server-side proxy; example mode when no backend is configured (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Not started — Phase 5/6 |
+
+## Tech Stack
+
+| Layer | Technology | Status |
+|---|---|---|
+| Backend | Python 3.11+, FastAPI, Pydantic v2, httpx; served locally with uvicorn | Implemented (`backend/`) |
+| Agent Brain | Our own orchestration in Python (`backend/idx_insight/agent/`); no agent framework | Implemented |
+| Analytics & validation | Deterministic Python code (no LLM arithmetic) | Implemented |
+| Data source | Sectors v2 REST API (`https://api.sectors.app/v2/`) through `SectorsService` → `SectorsAdapter` | Implemented (real + mock adapter) |
+| Runtime LLM | Provider-agnostic `LLMProvider` interface; Groq and Gemini providers over their REST APIs | Optional; see below |
+| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Recharts, lucide-react | In progress (`frontend/`) |
+| Tests | pytest + ruff (backend); `node:test`, ESLint, `tsc` (frontend) | Implemented |
+| Deployment | Vercel (frontend and, as serverless functions, the FastAPI backend) | Planned for Phases 5–6; nothing is deployed yet |
+
+**Which LLM is used right now?**
+
+- The code default is `LLM_PROVIDER=none`: no LLM, every decision uses the
+  deterministic rules. The agent is fully functional this way.
+- The setup the team develops and evaluates with is **Groq, model
+  `openai/gpt-oss-120b`** (`LLM_PROVIDER=groq`). It is the only provider verified
+  live on every LLM path (see Current Status).
+- Gemini is supported but only verified live for synthesis.
+- The final provider and model are **not decided** (Phase 6). Switching is a
+  configuration change only.
+
+## Running Locally: Mock Mode vs Real Data Mode
+
+The backend and the frontend run as two processes. The browser talks only to the
+Next.js server, which forwards questions to FastAPI; API keys live only in the
+backend's `.env`.
+
+### One-time setup
+
+```bash
+# from the repository root
+python -m venv .venv
+.venv/Scripts/pip install -e "backend[dev]"      # macOS/Linux: .venv/bin/pip
+cp .env.example .env                            # backend settings (git-ignored)
+
+cd frontend
+npm ci
+cp .env.example .env.local                      # IDX_INSIGHT_API_URL=http://127.0.0.1:8000
+```
+
+The backend reads `.env` in the repository root. Variables set in the shell
+override it, which is the easiest way to switch modes for one run.
+
+### The two modes at a glance
+
+| | Mock mode | Real data mode |
+|---|---|---|
+| Purpose | UI work, tests, development, anything offline | Demo, videos, real-data evaluation, final checks |
+| Data | Fictional fixtures that mirror Sectors response shapes (`sectors/mock_data.py`) | Live Sectors v2 API |
+| Settings | `SECTORS_DATA_MODE=mock` | `SECTORS_DATA_MODE=real` + `SECTORS_API_KEY` |
+| Sectors credits | **0** | Spent per question (see below) |
+| LLM | Recommended `LLM_PROVIDER=none` (0 LLM quota) | `LLM_PROVIDER=groq` + `LLM_MODEL=openai/gpt-oss-120b` + `GROQ_API_KEY` |
+| UI label | "Terhubung · data mock", results marked as test data | "Terhubung · data Sectors" |
+| Allowed in the demo/videos | **No** (hackathon rule: real data only) | Yes |
+
+Mock mode with an LLM enabled still spends LLM quota (Groq free tier:
+about 8,000 tokens per minute observed), so use `LLM_PROVIDER=none` unless you are
+testing the LLM paths.
+
+### Mock mode (no credits)
+
+```bash
+# terminal 1: backend
+cd backend
+SECTORS_DATA_MODE=mock LLM_PROVIDER=none ../.venv/Scripts/python -m uvicorn idx_insight.api.app:app --reload --port 8000
+
+# terminal 2: frontend
+cd frontend
+npm run dev                                     # open http://localhost:3000
+```
+
+PowerShell: set the variables first with
+`$env:SECTORS_DATA_MODE="mock"; $env:LLM_PROVIDER="none"`, then run uvicorn.
+
+Useful mock questions: "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi
+profitabilitas dan efisiensi" or "Disclosure apa yang perlu saya pantau minggu
+depan untuk bank dalam watchlist?". The fixtures include deliberate edge cases
+(conflicting BMRI growth, BBNI ratios in percent, missing data) so the UI shows
+data gaps and warnings.
+
+### Real data mode (spends credits)
+
+Before you start:
+
+1. Agree with the team before any real-data session. Each team has **1,000 credits
+   in total**, and the judging period needs a reserve (see the budget in PHASE.md).
+2. Check `backend/.sectors_local/ledger.json` for credits already used.
+3. Keep the caps in `.env`: `SECTORS_MAX_CREDITS_PER_DAY` (default 60) and
+   `SECTORS_MAX_CREDITS_TOTAL` (default 700). A request that could exceed a cap is
+   refused before it is sent.
+
+```bash
+# terminal 1: backend (keys come from .env)
+cd backend
+SECTORS_DATA_MODE=real LLM_PROVIDER=groq LLM_MODEL=openai/gpt-oss-120b \
+  ../.venv/Scripts/python -m uvicorn idx_insight.api.app:app --reload --port 8000
+
+# terminal 2: frontend
+cd frontend
+npm run dev
+```
+
+Approximate Sectors cost per question (measured call counts): one company ≈ 4
+credits, a four-bank comparison ≈ 8, sector-wide disclosure discovery ≈ 16–21. The
+8 real-data evaluation cases cost 28 credits in total.
+
+Ways to save credits:
+
+- Repeated questions are served from the local cache (`SECTORS_CACHE_MODE=readwrite`,
+  the default) at no cost.
+- `SECTORS_CACHE_MODE=replay` answers **only** from the cache and never calls the
+  API (0 credits). Use it to rehearse a demo with questions that were already asked.
+- `python -m tools.sectors_probe` shows a plan without calling anything; add
+  `--run` only when you mean to spend credits.
+- Unknown tickers and empty date windows still cost credits the first time.
+
+### Checking which mode is running
+
+```bash
+curl localhost:8000/health
+# {"status":"ok","data_mode":"mock","llm_provider":"none",...}
+
+curl -X POST localhost:8000/v1/agent/query -H "content-type: application/json" \
+  -d '{"query": "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi profitabilitas dan efisiensi"}'
+```
+
+The UI shows the same information in the top-right label. "Prototipe · data
+ilustrasi" means the frontend has no backend: `IDX_INSIGHT_API_URL` is empty, or the
+backend is not running. In that case the UI only opens illustrative examples.
+Restart `npm run dev` after editing `.env.local`.
 
 ## Project Purpose
 
@@ -357,14 +491,8 @@ Groq): mock cases 16/16 with 12 of 13 narratives accepted; real-data cases 8/8
 for 28 credits. The real-data run found a bug the mock could not (sub-sector
 display names such as "Banks" vs the slug "banks"), since fixed.
 
-Run the API locally:
-
-```bash
-cd backend
-../.venv/Scripts/python -m uvicorn idx_insight.api.app:app --reload
-curl -X POST localhost:8000/v1/agent/query -H "content-type: application/json" \
-  -d '{"query": "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi profitability dan efficiency"}'
-```
+To run the API and the UI, see
+[Running Locally: Mock Mode vs Real Data Mode](#running-locally-mock-mode-vs-real-data-mode).
 
 ## Known Limitations
 
