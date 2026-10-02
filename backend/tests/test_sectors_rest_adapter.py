@@ -122,11 +122,11 @@ def test_invalid_symbols_are_rejected_before_any_request(tmp_path):
     assert router.seen == []
 
 
-def test_credit_cap_surfaces_as_budget_exhausted_in_the_service(tmp_path):
+def test_credit_cap_surfaces_as_credit_cap_in_the_service(tmp_path):
     adapter, router, _ = adapter_for(tmp_path, {"/v2/corporate-actions/": (200, {})}, per_day=2)
     service = SectorsService(adapter)
     result = service.corporate_actions_calendar("2026-09-28", "2026-10-04")  # needs 3 credits
-    assert result.status == "budget_exhausted"
+    assert result.status == "credit_cap"
     assert router.seen == [] and service.calls[0].attempts == 0
 
 

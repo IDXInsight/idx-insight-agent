@@ -99,6 +99,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "id": "Retry terbatas oleh SectorsService", "en": "Bounded retry by SectorsService"},
     "recovery.outcome.continue": {
         "id": "Dilanjutkan tanpa data ini", "en": "Continued without this data"},
+    "recovery.action.credit_cap": {
+        "id": "Tidak memanggil Sectors lagi (batas credit tercapai; tidak ada credit terpakai)",
+        "en": "No further Sectors calls (credit cap reached; no credits spent)"},
+    "gap.credit_cap": {
+        "id": "Batas credit Sectors untuk hari ini atau total sudah tercapai, jadi data tidak "
+              "diambil. Pertanyaan yang pernah diajukan tetap bisa dibuka; coba lagi besok.",
+        "en": "The Sectors credit limit for today or in total has been reached, so no data was "
+              "retrieved. Questions asked before can still be opened; try again tomorrow."},
     "gap.tool_failure": {"id": "Data {what} tidak dapat diambil ({status}).",
                          "en": "Could not retrieve {what} ({status})."},
 

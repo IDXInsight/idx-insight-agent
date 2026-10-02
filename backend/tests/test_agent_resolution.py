@@ -10,6 +10,7 @@ from idx_insight.agent.timeframe import resolve_timeframe
 from idx_insight.llm.errors import LLMRateLimitError
 from idx_insight.llm.mock import MockLLMProvider
 from idx_insight.sectors import MockSectorsAdapter, SectorsService
+from idx_insight.sectors.credits import SectorsCreditCapError
 
 
 def resolve(query, **kwargs):
@@ -172,3 +173,29 @@ def test_provider_error_falls_back_to_rules():
     llm = gateway(MockLLMProvider({"intent": LLMRateLimitError("groq HTTP 429")}))
     assert resolve_intent(q, entities, llm).source == "rules"
     assert llm.state.llm_calls[0].status == "rate_limit"
+
+
+class _CreditCappedAdapter(MockSectorsAdapter):
+    """Every Sectors call is refused by the credit cap before it is sent."""
+
+    def __getattribute__(self, name):
+        attr = super().__getattribute__(name)
+        if name.startswith("get_") and callable(attr):
+            def refuse(*args, **kwargs):
+                raise SectorsCreditCapError("daily credit cap reached")
+            return refuse
+        return attr
+
+
+def test_credit_cap_is_reported_as_such_not_as_an_unknown_ticker(run):
+    state = run("Bagaimana kinerja ADRO?", adapter=_CreditCappedAdapter())
+    assert state.status != "needs_clarification"
+    assert not [g for g in state.data_gaps if g.kind == "unverified_company"]
+    cap = [g for g in state.data_gaps if g.kind == "budget_exhausted"]
+    assert len(cap) == 1 and "credit" in cap[0].detail
+
+
+def test_peer_comparison_survives_when_every_sectors_call_is_refused(run):
+    state = run("Bandingkan BBCA dan BBRI dari sisi profitabilitas", adapter=_CreditCappedAdapter())
+    assert state.status == "insufficient_evidence"
+    assert [g for g in state.data_gaps if g.kind == "budget_exhausted"]

@@ -63,6 +63,8 @@ class FinancialContext:
         self.known_sub_sectors: dict[str, str] = {}
         # (metric, year) -> (call id, {symbol: {field: value}}) from one screener call.
         self._screener: dict[tuple[str, str], tuple[str, dict[str, dict[str, float]]]] = {}
+        # (symbol, metric) series left out for mixed units; already reported as malformed.
+        self._mixed_units: set[tuple[str, str]] = set()
 
     # -- loading ---------------------------------------------------------------
 
@@ -156,7 +158,7 @@ class FinancialContext:
         else:
             values = self._quarterly_ratio(symbol, spec)
         fetched = data.report is not None or data.quarters or spec.source == "screener_ratio"
-        if not values and fetched:
+        if not values and fetched and (symbol, metric) not in self._mixed_units:
             key = ("gap.growth_uncomputable" if spec.source == "quarterly_growth"
                    else "gap.metric_missing")
             detail = t(self.lang, key, label=label, sym=symbol)
@@ -223,6 +225,7 @@ class FinancialContext:
             label = spec.label_in(self.lang)
             self.state.add_gap("malformed_data", t(self.lang, "gap.mixed_units", label=label,
                                                    sym=symbol, values=shown), symbol)
+            self._mixed_units.add((symbol, spec.name))
             return []
         converted = unit == "percent"
         out = []

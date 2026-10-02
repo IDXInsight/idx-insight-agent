@@ -38,6 +38,7 @@ def test_ratio_series_with_mixed_units_is_left_out(run, monkeypatch):
     assert "BBRI" not in cir["values"] and "BBCA" in cir["values"]
     gaps = [g for g in state.data_gaps if g.kind == "malformed_data" and g.symbol == "BBRI"]
     assert gaps and "1.89" in gaps[0].detail
+    assert not [g for g in state.data_gaps if g.kind == "missing_metric" and g.symbol == "BBRI"]
     assert comparison(state, "roe")["values"]["BBRI"] == pytest.approx(0.180)
 
 

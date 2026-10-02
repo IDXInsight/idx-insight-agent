@@ -18,8 +18,8 @@ Every new question spends Sectors credits; repeated questions are answered from 
 
 Overall: the product works end to end on real data and is deployed; the UI still has
 gaps, and end-to-end validation, security testing and the submission materials have
-not started. Sectors credits used so far: about 118 of 1,000 (49 during Phase 4, 9 on
-the deployment, about 40 and about 20 in the first two end-to-end runs).
+not started. Sectors credits used so far: about 152 of 1,000 (49 during Phase 4, 9 on
+the deployment, about 94 in three end-to-end runs).
 
 | Area | State | Details |
 |---|---|---|
@@ -33,7 +33,7 @@ the deployment, about 40 and about 20 in the first two end-to-end runs).
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
 | Security testing | Not started | Prompt-injection tests against the live LLM, Python dependency audit, GitHub secret scanning and push protection, runtime log review |
-| End-to-end validation (Phase 6) | In progress | Two real-data runs on 2026-10-02 (local and deployed, 10 questions): parser and unit fixes, non-bank questions work; see [docs/e2e-validation.md](docs/e2e-validation.md) |
+| End-to-end validation (Phase 6) | In progress | Three runs on 2026-10-02: 11 questions (local and deployed), real-data evaluation 6/8 live, 8/8 after making the discovery expectation depend on eligible events; failure cases; parser, unit, credit-cap, crash and firewall-message fixes; see [docs/e2e-validation.md](docs/e2e-validation.md) |
 | Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
 ## Tech Stack
@@ -621,14 +621,14 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase
 **End-to-end validation (Phase 6, in progress)**
 - Done: a local and a deployed real-data run, 10 questions including non-bank and
   English questions (see [docs/e2e-validation.md](docs/e2e-validation.md))
-- Deploy and re-check the ratio-unit fix (cost-to-income BBCA vs BBRI)
+- Done: ratio-unit fix deployed and re-checked; real-data evaluation re-run (6/8, 31 credits);
+  failure cases for invalid input, missing secret, firewall rate limit, credit cap, offline
 - Clarify the definition and unit of Sectors' `cost_to_income_ratio`
-- Re-run the 8 real-data evaluation cases (about 28–35 credits)
 - Exercise every Sectors endpoint through the deployed product: sector-wide discovery
   (market-wide calendar), NPL comparison (screener), ambiguous names, unknown tickers
 - Cross-check a sample of values against the Sectors app
 - Other sectors (non-bank companies by ticker work)
-- Failure cases: Groq rate limit, credit cap reached, Redis unavailable, timeouts
+- Failure cases still to test live: Groq rate limit, Redis unavailable, timeouts
 - Latency and credits per question type
 - Final runtime LLM provider and model
 
