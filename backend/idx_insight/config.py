@@ -44,6 +44,24 @@ class Settings(BaseModel):
     max_second_hop: int = Field(default=3, ge=0, le=10)
     max_requeries: int = Field(default=2, ge=0, le=5)
 
+    # Deployment. Vercel sets VERCEL=1; there the API refuses to run without the
+    # shared secret, and real data mode requires Redis (functions have no persistent disk).
+    vercel: bool = False
+    # Shared with the Next.js server only; requests without it are rejected (401).
+    internal_api_key: SecretStr | None = None
+    # Redis over the Upstash REST API: credit ledger, Sectors cache, answer cache, counters.
+    redis_rest_url: str | None = None
+    redis_rest_token: SecretStr | None = None
+    storage_prefix: str = Field(default="idx:", max_length=32)
+
+    # Usage limits for a public deployment (agent runs; cached answers are not counted).
+    rate_limit_per_ip: int = Field(default=5, ge=1)
+    rate_limit_window_seconds: int = Field(default=600, ge=1)
+    max_queries_per_day: int = Field(default=150, ge=1)
+    llm_max_calls_per_day: int = Field(default=300, ge=0)  # beyond it, answers use the rules
+    query_credit_headroom: int = Field(default=10, ge=0)  # refuse new runs this close to a cap
+    answer_cache_ttl_seconds: int = Field(default=6 * 3600, ge=0)  # 0 disables the answer cache
+
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
         env = os.environ if env is None else env
@@ -69,8 +87,31 @@ class Settings(BaseModel):
             "max_tool_calls": get("AGENT_MAX_TOOL_CALLS"),
             "max_second_hop": get("AGENT_MAX_SECOND_HOP"),
             "max_requeries": get("AGENT_MAX_REQUERIES"),
+            "vercel": get("VERCEL") is not None,
+            "internal_api_key": get("IDX_INSIGHT_API_SECRET"),
+            # Vercel's Upstash integration may name them KV_REST_API_*; both are accepted.
+            "redis_rest_url": get("UPSTASH_REDIS_REST_URL") or get("KV_REST_API_URL"),
+            "redis_rest_token": get("UPSTASH_REDIS_REST_TOKEN") or get("KV_REST_API_TOKEN"),
+            "storage_prefix": get("STORAGE_PREFIX"),
+            "rate_limit_per_ip": get("RATE_LIMIT_PER_IP"),
+            "rate_limit_window_seconds": get("RATE_LIMIT_WINDOW_SECONDS"),
+            "max_queries_per_day": get("MAX_QUERIES_PER_DAY"),
+            "llm_max_calls_per_day": get("LLM_MAX_CALLS_PER_DAY"),
+            "query_credit_headroom": get("QUERY_CREDIT_HEADROOM"),
+            "answer_cache_ttl_seconds": get("ANSWER_CACHE_TTL_SECONDS"),
         }
         return cls(**{k: v for k, v in values.items() if v is not None})
+
+    def deployment_problems(self) -> list[str]:
+        """Settings a Vercel deployment is missing; names only, never values."""
+        if not self.vercel:
+            return []
+        problems = []
+        if self.internal_api_key is None:
+            problems.append("IDX_INSIGHT_API_SECRET is required on Vercel")
+        if self.sectors_data_mode == "real" and not (self.redis_rest_url and self.redis_rest_token):
+            problems.append("Redis (UPSTASH_REDIS_REST_URL/TOKEN) is required for real data on Vercel")
+        return problems
 
 
 # Repository root (…/idx-insight-agent/.env); config.py lives in backend/idx_insight/.
