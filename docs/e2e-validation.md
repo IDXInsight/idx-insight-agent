@@ -44,3 +44,38 @@ Authored by: Prama
 - Failure cases: Groq rate limit, credit cap reached, Redis unavailable, timeouts
 - The deployed product (this run was local)
 - English questions
+
+## Run 2 — deployed product, real data (2026-10-02)
+
+| Setting | Value |
+|---|---|
+| Where | https://idx-insight.vercel.app, through the Next.js proxy (the browser's path: Firewall, shared secret, per-client limits) |
+| Data | Live Sectors v2 API |
+| LLM | Groq `openai/gpt-oss-120b` (used for synthesis in P1–P4; P5 had nothing to synthesise) |
+| Sectors credits | About 20, estimated from the 15 tool calls (the deployment ledger in Redis was not read) |
+| Latency | 2.3–4.9 s per new question; a repeated question came from the answer cache |
+
+### Questions
+
+| # | Question | Expected | Result |
+|---|---|---|---|
+| P1 | Bandingkan BBCA dan BBRI dari sisi cost to income | Run 1's parser fix works live | Parser fix works (2 calls, 3.7 s). **Data issue**: BBCA 51.5% vs BBRI 1.9%. The BBRI series in Sectors mixes 1.86, 1.85, 1.16, 1.00, 1.06 and 1.89; the per-value unit check read 1.89 as percent and 1.16 as a fraction. Fixed: units are now decided per series and a mixed series is reported as a malformed-data gap (needs a deploy and a live re-check) |
+| P2 | Bagaimana kinerja TLKM? | Non-bank company context | As expected: ROA, ROE, earnings and revenue growth, two AGMs; NIM marked not applicable (6 calls, 4.9 s) |
+| P3 | Compare ROE of TLKM and ISAT (English) | Non-bank comparison in English | As expected (2 calls, 3.5 s). Minor: the LLM narrative says "sector median" for the median of two companies |
+| P4 | Bandingkan NIM BBCA dan TLKM | NIM for BBCA only; TLKM not applicable, no comparison | As expected: status partial, both gaps reported (2 calls, 2.7 s) |
+| P5 | Disclosure ASII minggu depan | Non-bank discovery | 5 events found, none relevant in next week's window; status insufficient evidence, no invented events (3 calls, 2.3 s) |
+
+The production UI was checked with P3 (answer cache, no credits): English labels,
+small-multiple chart, history and the connection label work. It showed one UI issue,
+the watchlist ROE column filled with dashes when no watchlist company is in the result
+(fixed).
+
+### Findings
+
+| Finding | Follow-up |
+|---|---|
+| Mixed units in one ratio series produced a wrong cost-to-income comparison | Fixed in `analytics/numbers.py` and `agent/financials.py`, with tests |
+| Sectors does not document the definition or unit of `cost_to_income_ratio`; the values (BBCA 0.52–0.89, BBRI 1.00–1.89) do not match commonly reported bank cost-to-income ratios | Open: cross-check with the Sectors app or ask the Sectors team; until then treat the metric as unverified |
+| A company named in the question gets the relevance reason "Company is on the watchlist" | Open (wording) |
+| Company questions about non-banks always add the gap "NIM applies to banks only" | Open (noise; the default bundle includes NIM) |
+| The LLM narrative may call a two-company median a "sector median" | Open (wording) |
