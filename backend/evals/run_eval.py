@@ -22,6 +22,7 @@ from datetime import date
 from idx_insight.agent.orchestrator import InsightAgent
 from idx_insight.agent.state import AgentState
 from idx_insight.agent.synthesis import language_issue
+from idx_insight.analytics.events import SECOND_HOP_THRESHOLD
 from idx_insight.config import Settings, load_env_file
 from idx_insight.llm import build_llm_provider
 from idx_insight.sectors import build_adapter
@@ -81,8 +82,11 @@ def check(state: AgentState, expect: dict) -> list[str]:
     if len(state.duplicate_events) < expect.get("min_duplicates", 0):
         fail("duplicates not detected")
     research = {d.symbol for d in state.second_hop if d.decision == "research"}
-    if len(research) < expect.get("min_research", 0):
-        fail(f"only {len(research)} companies researched in second-hop")
+    # Real weeks can be quiet: require research only for companies with an event at or
+    # above the second-hop threshold.
+    eligible = {e.symbol for e in state.relevant_events if e.relevance_score >= SECOND_HOP_THRESHOLD}
+    if len(research) < min(expect.get("min_research", 0), len(eligible)):
+        fail(f"only {len(research)} of {len(eligible)} eligible companies researched in second-hop")
     if len(state.validation.accepted) < expect.get("min_accepted_claims", 0):
         fail(f"only {len(state.validation.accepted)} accepted claims")
     if missing := set(expect.get("must_research", [])) - research:
