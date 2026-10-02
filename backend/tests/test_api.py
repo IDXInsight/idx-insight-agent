@@ -159,7 +159,9 @@ def test_language_is_detected_or_overridden(client):
 def test_capabilities_list_bilingual_metric_labels(client):
     metrics = client.get("/v1/capabilities").json()["metrics"]
     assert metrics["earnings_growth_yoy"] == {"id": "Pertumbuhan laba YoY",
-                                              "en": "Earnings growth YoY"}
+                                              "en": "Earnings growth YoY", "direction": "higher"}
+    assert metrics["npl_ratio"]["direction"] == "lower"
+    assert metrics["loan_to_deposit_ratio"]["direction"] is None
 
 
 def test_event_findings_explain_why(client):

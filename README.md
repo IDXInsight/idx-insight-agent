@@ -15,18 +15,25 @@ for tests and offline development); Phase 5 (product UI) is in progress. See
 **Live:** https://idx-insight.vercel.app (real Sectors data, Groq `openai/gpt-oss-120b`).
 Every new question spends Sectors credits; repeated questions are answered from a cache.
 
-| Area | State |
-|---|---|
-| Agent Brain (resolution, planning, discovery, relevance, second-hop) | Implemented |
-| Deterministic analytics, evidence validation and sufficiency assessment | Implemented |
-| FastAPI backend | Implemented |
-| Sectors data | Real v2 REST adapter with credit guardrails (verified live on 2026-09-27); fictional mock data for tests |
-| Runtime LLM | Provider-agnostic interface with Gemini and Groq providers; default is rules-only (no LLM). Groq (`openai/gpt-oss-120b`) verified live on all LLM paths (evaluation 16/16 on 2026-09-27); Gemini verified live for synthesis only (other calls hit 503/429 during testing) |
-| Languages | Indonesian and English, following the user's language |
-| Evaluation | 17 mock cases (offline) and 8 structural real-data cases; real-data run 8/8 with Groq on 2026-09-27 |
-| Final LLM provider/model | **Not decided** |
-| Frontend (Next.js) | In progress — workspace UI connected to the agent API through a server-side proxy; example mode when no backend is configured (see [frontend/README.md](frontend/README.md)) |
-| Deployment (Vercel) | Deployed on 2026-10-02: frontend at https://idx-insight.vercel.app, backend behind a shared secret, Upstash Redis for the credit ledger, caches and usage limits |
+Overall: the product works end to end on real data and is deployed; the UI still has
+gaps, and end-to-end validation, security testing and the submission materials have
+not started. Sectors credits used so far: about 98 of 1,000 (49 during Phase 4, 9 on
+the deployment, about 40 in the first local end-to-end run).
+
+| Area | State | Details |
+|---|---|---|
+| Agent Brain (resolution, planning, discovery, relevance, second-hop) | Done | See [Agentic Workflow](#agentic-workflow) |
+| Deterministic analytics, evidence validation, sufficiency assessment | Done | No LLM arithmetic; unsupported claims are rejected and reported as data gaps |
+| FastAPI backend | Done | `GET /health`, `GET /v1/capabilities`, `POST /v1/agent/query` |
+| Sectors data | Done | Real v2 REST adapter for the 8 endpoints the agent needs, with credit guardrails; verified live on 2026-09-27 (real-data evaluation 8/8). Fictional mock data for tests |
+| Runtime LLM | Partial | Groq `openai/gpt-oss-120b` verified on every LLM path and used in production; Gemini verified for synthesis only. **Final provider not formally decided** |
+| Languages | Partial | The agent answers in Indonesian or English; the UI always asks for Indonesian |
+| Frontend (Next.js) | Partial | Workspace connected to the agent, evidence explorer, agent trace. Missing: free-ticker watchlist (four banks only), progress while the agent runs, language toggle, a chart in live mode, a clear message when the firewall rate limit answers 429 (see [frontend/README.md](frontend/README.md)) |
+| Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
+| Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
+| Security testing | Not started | Prompt-injection tests against the live LLM, Python dependency audit, GitHub secret scanning and push protection, runtime log review |
+| End-to-end validation (Phase 6) | In progress | First local real-data run on 2026-10-02: 5 questions, 4 as expected, 1 parser fix; see [docs/e2e-validation.md](docs/e2e-validation.md) |
+| Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
 ## Tech Stack
 
@@ -198,12 +205,27 @@ caps would silently reset. With Redis:
 `backend/.vercelignore` keeps `backend/.sectors_local/` (real Sectors data) and
 development files out of any upload, including CLI deployments.
 
+### Vercel Firewall rules
+
+These live in the Vercel dashboard (Firewall → Rules), not in the repository:
+
+| Project | Rule | Why |
+|---|---|---|
+| `idx-insight-api` | **Deny** when the `x-internal-key` header is missing and the path is not `/health` | Scanners and direct calls are blocked at the edge (403) before the function runs, so they cost no function usage. A wrong key still reaches the code and gets 401 |
+| `idx-insight` | **Rate limit** `/api/agent/query`: 10 requests per 60 s per IP, then 429 | Caps request floods, including repeated questions served from the cache, which the per-client limit in the backend does not count. Protects the Hobby plan's usage limits, which would pause the project |
+
+There is deliberately no per-IP rate limit on the backend: all legitimate backend
+traffic comes from the frontend's functions, so an IP limit there would throttle every
+visitor at once. Per-visitor limits are enforced in code with the IP the proxy forwards.
+Hobby allows one rate-limit rule and three custom rules per project.
+
 Verified on the deployment (2026-10-02): direct backend calls without the secret
-(including `/docs`) answer 401; security headers are set; neither the backend URL nor
+(including `/docs`) are denied at the edge (403), and with a wrong key answer 401; security headers are set; neither the backend URL nor
 any key appears in the HTML or client JavaScript; a new question takes 4–6 s on real
 data; a repeated question is answered from Redis in about 0.6 s with no Sectors or LLM
 call, also after a redeploy; the per-client limit answers 429 after five new questions
-in ten minutes. The two real-data smoke-test questions cost 9 credits.
+in ten minutes, and the firewall answers 429 after ten requests in a minute. The two
+real-data smoke-test questions cost 9 credits.
 
 ## Project Purpose
 
@@ -566,12 +588,56 @@ To run the API and the UI, see
 - Entity aliases cover a small set of companies; other companies are recognised
   by their ticker.
 - Relevance weights and thresholds are initial heuristics and need tuning on real data.
-- Only Indonesian and English are supported.
+- The analysis is built for banks: the metric catalogue (NIM, CASA, LDR, CAR, NPL,
+  cost-to-income) and every evaluation case are about banks. Discovery of disclosures
+  works by ticker and sub-sector in general, but questions about non-bank companies
+  have not been tested.
+- Only part of the Sectors integration has been exercised through the deployment
+  (company report, quarterly financials, filings, per-company corporate actions). The
+  market-wide calendar, screener (NPL), sub-sector list and report dates were verified
+  live on 2026-09-27 from a local run, not yet through the deployment. Values have not
+  been cross-checked against the Sectors app.
+- Only Indonesian and English are supported, and the UI currently always asks for
+  Indonesian.
+- The UI watchlist offers four banks (BBCA, BBRI, BMRI, BBNI) although the API accepts
+  any IDX ticker.
 - The API is meant to be called only by the Next.js server (shared secret); it has no
   end-user accounts. Per-client limits use the client IP forwarded by that server.
 
 ## Remaining Work
 
-Phases 5–7 in [PHASE.md](PHASE.md): the Next.js UI and Vercel deployment (with
-persistent credit guardrails), end-to-end validation (including the final choice
-of the runtime LLM provider), and demo/submission materials.
+Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase 5.
+
+**Product UI (Phase 5, in progress)**
+- Watchlist with any IDX ticker instead of four banks
+- Progress feedback while the agent runs (a new question takes 4–6 s)
+- Indonesian/English toggle passed to the API (validated to `id` or `en`)
+- Show the rate-limit message when the firewall answers 429 (its body is not the proxy's error format)
+- Smaller components in `frontend/app/page.tsx`, mobile layout, empty and error states
+
+**End-to-end validation (Phase 6, in progress)**
+- Done: first local real-data run, 5 questions (see [docs/e2e-validation.md](docs/e2e-validation.md))
+- Re-run the 8 real-data evaluation cases (about 28–35 credits)
+- Exercise every Sectors endpoint through the deployed product: sector-wide discovery
+  (market-wide calendar), NPL comparison (screener), ambiguous names, unknown tickers
+- Cross-check a sample of values against the Sectors app
+- Questions about non-bank companies and other sectors
+- Failure cases: Groq rate limit, credit cap reached, Redis unavailable, timeouts
+- Latency and credits per question type
+- Final runtime LLM provider and model
+
+**Security checks (Phase 6, not started)**
+- Prompt injection and advice requests against the live LLM (system-prompt extraction,
+  instructions to ignore rules, fabricated claims, HTML or script in questions)
+- Independent re-test of the deployment protections (missing or wrong key, spoofed
+  client IP, per-client and firewall limits, keys or backend URL in the browser)
+- `pip-audit` for the backend dependencies (`npm audit` for the frontend: 0 vulnerabilities)
+- GitHub secret scanning and push protection on the public repository
+- Review of the Vercel runtime logs for secrets
+
+**Demo and submission (Phase 7, not started)**
+- One-sentence problem statement; one-minute teaser; judging video of up to three
+  minutes recorded on the live product with real data and the LLM enabled
+- A short overview for judges at the top of this README (live link, videos, screenshots)
+- Social media post with the Sectors thumbnail template; submission form
+- Credit caps for the judging period (9–16 Oct) with at least 200 credits in reserve

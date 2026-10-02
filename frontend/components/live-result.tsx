@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import PeerChart from "@/components/peer-chart";
 import { AlertTriangle, ArrowRight, ArrowUpRight, Check, CircleHelp, Clock3, ListFilter, Search, ShieldCheck, Sparkles } from "lucide-react";
-import { type AgentEvent, type AgentResponse, type EvidenceItem, dayMonth, eventTypeLabels, formatPercent, periodLabel } from "@/lib/agent";
+import { type AgentEvent, type AgentResponse, type EvidenceItem, type MetricDirection, dayMonth, eventTypeLabels, formatPercent, periodLabel } from "@/lib/agent";
 
 /** What the evidence drawer shows for a live finding: the claim plus the evidence rows it cites. */
 export type LiveEvidence = {
@@ -28,12 +29,13 @@ export function secondHopLabel(decision: string | null | undefined): string | un
 type Props = {
   result: AgentResponse;
   metricLabels: Record<string, string>;
+  metricDirections: Record<string, MetricDirection>;
   onEvidence: (evidence: LiveEvidence) => void;
   onTrace: () => void;
 };
 
 /** Renders a real agent response with the prototype's panels; only data the backend returned is shown. */
-export default function LiveResult({ result, metricLabels, onEvidence, onTrace }: Props) {
+export default function LiveResult({ result, metricLabels, metricDirections, onEvidence, onTrace }: Props) {
   const [filter, setFilter] = useState("Semua");
   const byId = new Map(result.evidence.map(e => [e.evidence_id, e]));
   const claims = new Map(result.claims.map(c => [c.claim_id, c]));
@@ -81,6 +83,8 @@ export default function LiveResult({ result, metricLabels, onEvidence, onTrace }
       {briefing.narrative?.length ? <div className="narrative">{briefing.narrative.map((s, i) => <p key={i}>{s.text}</p>)}</div> : null}
       <div className="briefing-bottom"><span><ShieldCheck size={14} /> {result.validation.accepted} temuan tervalidasi{result.validation.rejected ? ` · ${result.validation.rejected} ditolak` : ""}</span><button className="text-button" onClick={onTrace}>Lihat proses riset <ArrowRight size={14} /></button></div>
     </section>
+
+    {peers.length > 0 && <PeerChart metrics={peers} symbols={peerSymbols} labels={metricLabels} directions={metricDirections} onEvidence={openPeerValue} />}
 
     {peers.length > 0 && <section className="panel peer-panel"><div className="section-header"><div><span className="eyebrow">PERBANDINGAN METRIK</span><h2>Periode disejajarkan per metrik</h2></div><span className={`status-pill ${peers.every(p => p.aligned) ? "" : "warn"}`}>{peers.every(p => p.aligned) ? <><Check size={12} /> Periode sejajar</> : <><AlertTriangle size={12} /> Periode berbeda</>}</span></div>
       <div className="table-scroll"><table><caption className="sr-only">Perbandingan metrik dari data Sectors. Klik angka untuk melihat bukti.</caption>

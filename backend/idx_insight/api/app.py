@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 
 from idx_insight import __version__
 from idx_insight.agent.planner import ALLOWED
-from idx_insight.analytics.metrics import BUNDLES, KNOWN_UNSUPPORTED, METRICS
+from idx_insight.analytics.metrics import BUNDLES, DIRECTION, KNOWN_UNSUPPORTED, METRICS
 from idx_insight.api.guard import UsageLimitError
 from idx_insight.api.schemas import QueryRequest, QueryResponse
 from idx_insight.api.service import AgentService
@@ -110,7 +110,8 @@ def capabilities(settings: Settings = Depends(get_settings)) -> dict:
         "languages": ["id", "en"],
         "sectors_tools": sorted(DEFAULT_ALLOWLIST),
         "intents": sorted(ALLOWED),
-        "metrics": {name: {"id": spec.label_in("id"), "en": spec.label_in("en")}
+        "metrics": {name: {"id": spec.label_in("id"), "en": spec.label_in("en"),
+                           "direction": DIRECTION.get(name)}
                     for name, spec in METRICS.items()},
         "metric_bundles": BUNDLES,
         "unsupported_metrics": sorted(KNOWN_UNSUPPORTED.values()),

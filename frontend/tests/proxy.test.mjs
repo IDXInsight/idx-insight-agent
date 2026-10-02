@@ -20,6 +20,7 @@ test("ignores values that are not IP addresses", () => {
 test("maps backend replies onto user-facing error codes", () => {
   assert.equal(errorForBackend(429, { error: "daily_limit" }), "daily_limit");
   assert.equal(errorForBackend(429, { error: "rate_limited" }), "rate_limited");
+  assert.equal(errorForBackend(429, { error: { code: "429", message: "rate limit" } }), "rate_limited");
   assert.equal(errorForBackend(429, null), "rate_limited");
   assert.equal(errorForBackend(422, {}), "invalid_request");
   assert.equal(errorForBackend(503, { error: "storage_unavailable" }), "backend_unavailable");

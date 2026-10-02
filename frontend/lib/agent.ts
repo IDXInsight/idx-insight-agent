@@ -87,8 +87,11 @@ export type AgentResponse = {
 };
 
 /** Result of `GET /api/agent/status`: whether a backend is configured and reachable. */
+/** Which direction of a metric is usually read as favourable; null = no single direction. */
+export type MetricDirection = "higher" | "lower" | null;
+
 export type AgentStatus =
-  | { live: true; dataSource: string; llmProvider: string; metrics: Record<string, string> }
+  | { live: true; dataSource: string; llmProvider: string; metrics: Record<string, string>; directions: Record<string, MetricDirection> }
   | { live: false };
 
 export type ResultView = "discovery" | "peers" | "company";
