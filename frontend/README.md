@@ -33,6 +33,13 @@ Checks: `npm run typecheck`, `npm run lint`, `npm run build`, `npm test` (after 
 - The browser never calls the backend directly. `app/api/agent/status` and
   `app/api/agent/query` are server-side route handlers that validate input and forward
   to FastAPI, so the backend URL stays server-side and no CORS setup is needed.
+- The proxy sends the shared secret (`X-Internal-Key`) and the visitor's IP
+  (`X-Client-IP`, read from the headers Vercel sets itself) so the backend can reject
+  direct calls and limit runs per visitor. Backend limits come back as `rate_limited` or
+  `daily_limit` and are explained in the UI (`lib/proxy.ts`).
+- `next.config.ts` sets security headers on every page: a same-origin Content Security
+  Policy, `X-Frame-Options: DENY`, `nosniff`, a strict referrer policy and a
+  permissions policy.
 - `lib/agent.ts` mirrors the response contract of `POST /v1/agent/query`
   (`backend/idx_insight/api/schemas.py`) and holds the display helpers.
 - `components/live-result.tsx` renders a real response with the prototype's panels;
@@ -46,6 +53,7 @@ Checks: `npm run typecheck`, `npm run lint`, `npm run build`, `npm test` (after 
 | Variable | Scope | Purpose |
 |---|---|---|
 | `IDX_INSIGHT_API_URL` | server | FastAPI base URL; empty = example mode |
+| `IDX_INSIGHT_API_SECRET` | server | shared secret, same value as on the backend |
 | `AGENT_TIMEOUT_MS` | server | timeout for one agent run (default 110000) |
 | `NEXT_PUBLIC_SITE_URL` | public | absolute site URL for social preview images |
 
@@ -55,6 +63,4 @@ No Sectors or LLM key is ever needed by the frontend.
 
 - The UI is Indonesian only; the agent also answers in English.
 - The response has no multi-period series, so connected mode shows no historical chart.
-- Deployment protections from PHASE.md Phase 5 (per-day caps, rate limiting,
-  persistent cache and credit ledger) are not implemented yet.
 - Streamed progress while the agent runs.
