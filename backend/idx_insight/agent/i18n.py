@@ -122,6 +122,11 @@ MESSAGES: dict[str, dict[str, str]] = {
               "pecahan sebelum dibandingkan.",
         "en": "{sym} ratios in the company report are expressed in percent and were normalised "
               "to fractions before comparison."},
+    "gap.mixed_units": {
+        "id": "{label} {sym} di company report memakai satuan yang tidak konsisten antartahun "
+              "({values}); nilainya tidak dipakai daripada ditebak.",
+        "en": "{label} for {sym} in the company report uses inconsistent units across years "
+              "({values}); the values are left out rather than guessed."},
     "gap.incomplete": {
         "id": "Laporan {sym} {quarter} tidak memuat financials_sector_metrics; metrik terkait "
               "tidak dihitung untuk periode itu.",

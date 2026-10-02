@@ -13,7 +13,7 @@ from idx_insight.agent.i18n import t
 from idx_insight.agent.recovery import record_tool_failure
 from idx_insight.agent.state import AgentState, Conflict, RecoveryAction
 from idx_insight.analytics.metrics import METRICS, MetricSpec
-from idx_insight.analytics.numbers import fmt_pct, normalize_ratio, pct_change, safe_div
+from idx_insight.analytics.numbers import fmt_pct, pct_change, ratio_series_unit, safe_div
 from idx_insight.analytics.periods import prior_year_period, quarter_label
 from idx_insight.models import MetricValue
 from idx_insight.sectors.schemas import CompanyReport, QuarterlyFinancial
@@ -214,12 +214,22 @@ class FinancialContext:
         data = self._data(symbol)
         if report is None or report.financials is None or data.report_call is None:
             return []
+        entries = report.financials.historical_financial_ratio
+        raws = [_get_path(entry, str(spec.path)) for entry in entries]
+        unit = ratio_series_unit(raws)
+        if unit == "mixed":
+            pairs = zip(entries, raws, strict=True)
+            shown = ", ".join(f"{entry.year}: {raw:g}" for entry, raw in pairs if raw is not None)
+            label = spec.label_in(self.lang)
+            self.state.add_gap("malformed_data", t(self.lang, "gap.mixed_units", label=label,
+                                                   sym=symbol, values=shown), symbol)
+            return []
+        converted = unit == "percent"
         out = []
-        for entry in report.financials.historical_financial_ratio:
-            raw = _get_path(entry, str(spec.path))
-            value, converted = normalize_ratio(raw)
-            if value is None:
+        for entry, raw in zip(entries, raws, strict=True):
+            if raw is None:
                 continue
+            value = raw / 100 if converted else raw
             period = str(entry.year)
             note = None
             if converted:

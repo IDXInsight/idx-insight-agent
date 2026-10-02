@@ -25,6 +25,22 @@ def test_percent_units_are_normalized(run):
     assert ev and all(e.value < 1 for e in ev)
 
 
+def test_ratio_series_with_mixed_units_is_left_out(run, monkeypatch):
+    # Seen on real data: one series mixing values above and below the percent threshold.
+    from idx_insight.sectors import mock_data
+
+    ratios = dict(mock_data._RATIOS)
+    ratios["BBRI"] = {2024: (0.031, 0.195, 0.078, 1.16, 0.65, 0.89, 0.26),
+                      2025: (0.029, 0.180, 0.074, 1.89, 0.64, 0.92, 0.25)}
+    monkeypatch.setattr(mock_data, "_RATIOS", ratios)
+    state = run(PEER_Q)
+    cir = comparison(state, "cost_to_income_ratio")
+    assert "BBRI" not in cir["values"] and "BBCA" in cir["values"]
+    gaps = [g for g in state.data_gaps if g.kind == "malformed_data" and g.symbol == "BBRI"]
+    assert gaps and "1.89" in gaps[0].detail
+    assert comparison(state, "roe")["values"]["BBRI"] == pytest.approx(0.180)
+
+
 def test_contradictory_growth_is_held_back(run):
     state = run(PEER_Q)
     assert [c.symbol for c in state.conflicts] == ["BMRI"]

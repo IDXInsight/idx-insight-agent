@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from statistics import median
+from typing import Literal
 
 # Ratios are expected as fractions (0.235 = 23.5%). Anything above this
 # magnitude is treated as having been reported in percent.
@@ -32,13 +33,20 @@ def spread(a: float | None, b: float | None) -> float | None:
     return a - b
 
 
-def normalize_ratio(value: float | None) -> tuple[float | None, bool]:
-    """Return (fractional value, was_converted_from_percent)."""
-    if value is None:
-        return None, False
-    if abs(value) > _RATIO_PERCENT_THRESHOLD:
-        return value / 100, True
-    return value, False
+def ratio_series_unit(values: list[float | None]) -> Literal["fraction", "percent", "mixed"]:
+    """Unit of one ratio series (one company, one field, every year), decided as a whole.
+
+    A per-value check would read 1.86 as percent and 1.16 as a fraction in the same
+    series. If every value is above the threshold the series is in percent; if none is,
+    it is in fractions; anything else is ambiguous and must not be guessed.
+    """
+    present = [v for v in values if v is not None]
+    above = [abs(v) > _RATIO_PERCENT_THRESHOLD for v in present]
+    if present and all(above):
+        return "percent"
+    if not any(above):
+        return "fraction"
+    return "mixed"
 
 
 def robust_outliers(values: dict[str, float], threshold: float = 2.5, min_n: int = 4) -> list[str]:
