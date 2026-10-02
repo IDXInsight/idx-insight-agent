@@ -36,7 +36,9 @@ _BUNDLE_WORDS: dict[str, str] = {
 _METRIC_WORDS: dict[str, str] = {
     "roa": "roa", "roe": "roe", "nim": "net_interest_margin", "casa": "casa_ratio",
     "ldr": "loan_to_deposit_ratio", "car": "capital_adequacy_ratio",
-    "cost-to-income": "cost_to_income_ratio", "cir": "cost_to_income_ratio",
+    # Common spellings of the same metric.
+    "cost to income": "cost_to_income_ratio", "cost-to-income": "cost_to_income_ratio",
+    "cost/income": "cost_to_income_ratio", "cir": "cost_to_income_ratio",
     "npl": "npl_ratio",
 }
 
