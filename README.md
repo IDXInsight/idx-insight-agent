@@ -23,7 +23,7 @@ for tests and offline development); Phase 5 (product UI) is in progress. See
 | Evaluation | 17 mock cases (offline) and 8 structural real-data cases; real-data run 8/8 with Groq on 2026-09-27 |
 | Final LLM provider/model | **Not decided** |
 | Frontend (Next.js) | In progress — workspace UI connected to the agent API through a server-side proxy; example mode when no backend is configured (see [frontend/README.md](frontend/README.md)) |
-| Deployment (Vercel) | Not started — Phase 5/6 |
+| Deployment (Vercel) | Code ready (shared secret, Redis-backed credit ledger and caches, usage limits); not deployed yet |
 
 ## Tech Stack
 
@@ -36,7 +36,7 @@ for tests and offline development); Phase 5 (product UI) is in progress. See
 | Runtime LLM | Provider-agnostic `LLMProvider` interface; Groq and Gemini providers over their REST APIs | Optional; see below |
 | Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Recharts, lucide-react | In progress (`frontend/`) |
 | Tests | pytest + ruff (backend); `node:test`, ESLint, `tsc` (frontend) | Implemented |
-| Deployment | Vercel (frontend and, as serverless functions, the FastAPI backend) | Planned for Phases 5–6; nothing is deployed yet |
+| Deployment | Vercel: two projects from this repository (frontend, and the FastAPI backend as one Python function); Upstash Redis for shared state | Configured in code; nothing is deployed yet |
 
 **Which LLM is used right now?**
 
@@ -158,6 +158,32 @@ The UI shows the same information in the top-right label. "Prototipe · data
 ilustrasi" means the frontend has no backend: `IDX_INSIGHT_API_URL` is empty, or the
 backend is not running. In that case the UI only opens illustrative examples.
 Restart `npm run dev` after editing `.env.local`.
+
+## Deployment (Vercel)
+
+Two Vercel projects from this repository; the browser only talks to the frontend.
+
+| Project | Root Directory | What runs |
+|---|---|---|
+| Frontend | `frontend` | Next.js; its server-side proxy forwards questions to the backend with `X-Internal-Key` and the client's IP |
+| Backend | `backend` | FastAPI as one Python function (`[tool.vercel] entrypoint` in `pyproject.toml`, limits in `vercel.json`) |
+
+The backend refuses to serve on Vercel without `IDX_INSIGHT_API_SECRET`, and refuses
+real data without Redis, because the function's disk does not persist and the credit
+caps would silently reset. With Redis:
+
+- **Credit ledger**: the worst-case cost is reserved atomically in Redis before each
+  Sectors call and corrected to the actual cost afterwards, so concurrent requests
+  cannot pass a cap together. If Redis is unreachable, Sectors calls are refused.
+- **Sectors cache**: raw responses expire with the same freshness rules as locally.
+- **Answer cache**: a repeated question (same wording, scope, language and day) is
+  answered without a new run and without spending credits or LLM quota.
+- **Usage limits**: runs per client and per day, LLM calls per day (then rules-only
+  answers), and a credit headroom check; limits answer HTTP 429 with
+  `{"error": "rate_limited" | "daily_limit"}`.
+
+`backend/.vercelignore` keeps `backend/.sectors_local/` (real Sectors data) and
+development files out of any upload, including CLI deployments.
 
 ## Project Purpose
 
@@ -431,6 +457,14 @@ variables already set in the real environment always take precedence.
 | `LLM_TEMPERATURE` | optional; provider default when empty |
 | `LLM_MAX_OUTPUT_TOKENS` | output cap (default 4096) |
 | `AGENT_MAX_TOOL_CALLS` / `AGENT_MAX_SECOND_HOP` / `AGENT_MAX_REQUERIES` | agent bounds |
+| `IDX_INSIGHT_API_SECRET` | shared with the Next.js server; required in `X-Internal-Key` on every route except `/health` when set; required on Vercel |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Redis for the credit ledger, caches and usage counters (also read as `KV_REST_API_URL` / `KV_REST_API_TOKEN`); required for real data on Vercel |
+| `STORAGE_PREFIX` | key prefix in Redis (default `idx:`) |
+| `RATE_LIMIT_PER_IP` / `RATE_LIMIT_WINDOW_SECONDS` | agent runs per client per window (default 5 per 600 s) |
+| `MAX_QUERIES_PER_DAY` | agent runs per day across all clients (default 150) |
+| `LLM_MAX_CALLS_PER_DAY` | LLM calls per day; beyond it answers use the rules (default 300) |
+| `QUERY_CREDIT_HEADROOM` | refuse a new run when fewer Sectors credits remain under a cap (default 10) |
+| `ANSWER_CACHE_TTL_SECONDS` | how long a repeated question is answered from the cache (default 6 h; 0 disables) |
 
 ## Implemented Features
 
@@ -462,12 +496,14 @@ cd backend
 ../.venv/Scripts/ruff check idx_insight tests evals
 ```
 
-226 deterministic tests cover agent decisions (resolution, planning, discovery,
+293 deterministic tests cover agent decisions (resolution, planning, discovery,
 relevance, second-hop with and without an LLM, recovery), analytics, evidence
 validation and sufficiency, the Sectors service and mock adapter, the LLM layer
 (Gemini/Groq request and response normalisation through a fake HTTP transport,
 structured output, tool calls, error normalisation, configuration), dependency
-direction, bilingual output, the evaluation cases and the API contract. No test
+direction, bilingual output, the evaluation cases, the API contract and the deployment
+protections (shared store, Redis REST format, shared credit ledger, internal key, usage
+limits, answer cache). No test
 needs an API key or network access; tests never read a local `.env`.
 
 ### Evaluation
@@ -496,8 +532,9 @@ To run the API and the UI, see
 
 ## Known Limitations
 
-- Credit guardrails keep their ledger and cache on the local disk; a Vercel
-  deployment needs persistent storage for them (planned in Phase 5).
+- Locally the credit ledger and cache are files under `backend/.sectors_local/`; a
+  deployment keeps them in Redis, so the two ledgers count separately. Compare both
+  with the Sectors dashboard before setting the deployed caps.
 - Sectors bills 404s and empty results, so repeated questions about unknown
   tickers or empty windows still cost credits the first time.
 - Only Groq has been exercised on every LLM path against the live API; Gemini's
@@ -509,8 +546,9 @@ To run the API and the UI, see
 - Entity aliases cover a small set of companies; other companies are recognised
   by their ticker.
 - Relevance weights and thresholds are initial heuristics and need tuning on real data.
-- Only Indonesian and English are supported; the API has no authentication or
-  rate limiting yet.
+- Only Indonesian and English are supported.
+- The API is meant to be called only by the Next.js server (shared secret); it has no
+  end-user accounts. Per-client limits use the client IP forwarded by that server.
 
 ## Remaining Work
 
