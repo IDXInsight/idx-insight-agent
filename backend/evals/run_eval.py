@@ -30,6 +30,9 @@ from idx_insight.sectors import build_adapter
 CASES_FILE = pathlib.Path(__file__).with_name("cases.json")
 # Structural expectations only: real data changes, so no fixed values are asserted.
 REAL_CASES_FILE = pathlib.Path(__file__).with_name("cases_real.json")
+# Off-topic, meta, advice and vague questions next to clear research ones. Always run on mock
+# data (0 Sectors credits); meant for --live, where the LLM classifies what the rules cannot.
+SCOPE_CASES_FILE = pathlib.Path(__file__).with_name("cases_scope.json")
 DEFAULT_AS_OF = date(2026, 9, 26)  # the date the mock fixtures are built around
 
 
@@ -66,6 +69,10 @@ def check(state: AgentState, expect: dict) -> list[str]:
         failures.append(message)
 
     intent = state.intent.name if state.intent else None
+    if "intent_in" in expect and intent not in expect["intent_in"]:
+        fail(f"intent {intent} not in {expect['intent_in']}")
+    if "max_tool_calls" in expect and len(state.tool_calls) > expect["max_tool_calls"]:
+        fail(f"{len(state.tool_calls)} Sectors calls for a question that needs none")
     if "intent" in expect and intent != expect["intent"]:
         fail(f"intent {intent} != {expect['intent']}")
     if "language" in expect and state.language != expect["language"]:
@@ -141,7 +148,7 @@ def run_cases(agent: InsightAgent, as_of: date = DEFAULT_AS_OF,
     for i, case in enumerate(json.loads(cases_file.read_text(encoding="utf-8"))):
         if i and pause:
             time.sleep(pause)  # stay within provider rate limits (e.g. free-tier tokens/minute)
-        state = agent.run(case["query"], as_of=as_of)
+        state = agent.run(case["query"], as_of=as_of, watchlist=case.get("watchlist"))
         results.append(CaseResult(
             case_id=case["id"],
             failures=check(state, case.get("expect", {})),
@@ -156,8 +163,9 @@ def run_cases(agent: InsightAgent, as_of: date = DEFAULT_AS_OF,
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--live", action="store_true", help="use the configured LLM provider")
-    parser.add_argument("--cases", choices=["mock", "real"], default="mock",
-                        help="mock fixtures (default) or structural cases for real data")
+    parser.add_argument("--cases", choices=["mock", "real", "scope"], default="mock",
+                        help="mock fixtures (default), structural cases for real data, or scope "
+                             "cases (always on mock data)")
     parser.add_argument("--as-of", type=date.fromisoformat, default=None,
                         help="reference date (mock default 2026-09-26, real default today)")
     parser.add_argument("--pause", type=float, default=0.0,
@@ -168,6 +176,8 @@ def main(argv: list[str] | None = None) -> int:
     settings = Settings.from_env()
     if not args.live:
         settings = settings.model_copy(update={"llm_provider": "none"})
+    if args.cases == "scope":
+        settings = settings.model_copy(update={"sectors_data_mode": "mock"})
     adapter = build_adapter(settings)
     agent = InsightAgent(adapter, llm=build_llm_provider(settings), settings=settings)
     real = args.cases == "real"
@@ -178,8 +188,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Sectors: {settings.sectors_data_mode} | LLM: {settings.llm_provider}{model} "
           f"| cases: {args.cases} | as_of: {as_of}\n")
 
-    results = run_cases(agent, as_of, REAL_CASES_FILE if real else CASES_FILE,
-                        pause=args.pause)
+    files = {"mock": CASES_FILE, "real": REAL_CASES_FILE, "scope": SCOPE_CASES_FILE}
+    results = run_cases(agent, as_of, files[args.cases], pause=args.pause)
     for r in results:
         mark = "PASS" if r.passed else "FAIL"
         print(f"{mark}  {r.case_id:28s} tools={r.tool_calls:2d} llm={r.llm_calls} "

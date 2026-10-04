@@ -1,0 +1,453 @@
+[
+ {
+  "id": "about_lu_siapa",
+  "query": "Lu siapa?",
+  "expect": {
+   "intent_in": [
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "about_bisa_apa",
+  "query": "Kamu bisa apa aja?",
+  "expect": {
+   "intent_in": [
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "about_who_en",
+  "query": "Who are you?",
+  "expect": {
+   "intent_in": [
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "about_what_en",
+  "query": "What can you do?",
+  "expect": {
+   "intent_in": [
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "about_apa_itu",
+  "query": "Apa itu IDX Insight?",
+  "expect": {
+   "intent_in": [
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "about_cara_pakai",
+  "query": "Cara pakai aplikasi ini gimana?",
+  "expect": {
+   "intent_in": [
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "about_bisa_analisis",
+  "query": "kamu bisa analisis saham?",
+  "expect": {
+   "intent_in": [
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "about_sejago_apa",
+  "query": "kamu sejago apa",
+  "expect": {
+   "intent_in": [
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "about_can_you_en",
+  "query": "Can you analyse Indonesian bank stocks?",
+  "expect": {
+   "intent_in": [
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "research_can_you_compare",
+  "query": "Kamu bisa bandingkan ROE BBCA dan BBRI?",
+  "expect": {
+   "intent_in": [
+    "peer_comparison"
+   ]
+  }
+ },
+ {
+  "id": "advice_bank_jelek",
+  "query": "Ada ga sih bank yang jelek?",
+  "expect": {
+   "intent_in": [
+    "advice"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "advice_perlu_analisis",
+  "query": "Menurutlu bank apa yang perlu gue analisis?",
+  "expect": {
+   "intent_in": [
+    "advice"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "advice_paling_aman",
+  "query": "Bank mana yang paling aman buat investasi saham?",
+  "expect": {
+   "intent_in": [
+    "advice"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "advice_bagus_dibeli",
+  "query": "Saham bank apa yang bagus buat dibeli sekarang?",
+  "expect": {
+   "intent_in": [
+    "advice"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "advice_best_en",
+  "query": "Which bank stock is the best?",
+  "expect": {
+   "intent_in": [
+    "advice"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "advice_rekomendasi",
+  "query": "Kasih rekomendasi bank dong",
+  "expect": {
+   "intent_in": [
+    "advice"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "advice_terburuk",
+  "query": "Bank terburuk di BEI apa?",
+  "expect": {
+   "intent_in": [
+    "advice"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "advice_buy_en",
+  "query": "Should I buy bank stocks now?",
+  "expect": {
+   "intent_in": [
+    "advice"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "oos_resep",
+  "query": "Resep nasi goreng dong",
+  "expect": {
+   "intent_in": [
+    "out_of_scope",
+    "clarify"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "oos_cuaca",
+  "query": "Cuaca Jakarta hari ini gimana?",
+  "expect": {
+   "intent_in": [
+    "out_of_scope",
+    "clarify"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "oos_presiden",
+  "query": "Siapa presiden Indonesia?",
+  "expect": {
+   "intent_in": [
+    "out_of_scope",
+    "clarify"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "oos_kode",
+  "query": "Buatin kode python untuk sorting",
+  "expect": {
+   "intent_in": [
+    "out_of_scope",
+    "clarify"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "oos_terjemah",
+  "query": "Tolong terjemahkan good morning ke bahasa Jepang",
+  "expect": {
+   "intent_in": [
+    "out_of_scope",
+    "clarify"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "oos_halo",
+  "query": "Halo",
+  "expect": {
+   "intent_in": [
+    "about",
+    "out_of_scope",
+    "clarify"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "oos_makasih",
+  "query": "Terima kasih ya",
+  "expect": {
+   "intent_in": [
+    "about",
+    "out_of_scope",
+    "clarify"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "oos_capital_en",
+  "query": "What is the capital of France?",
+  "expect": {
+   "intent_in": [
+    "out_of_scope",
+    "clarify"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "oos_joke_en",
+  "query": "Tell me a joke",
+  "expect": {
+   "intent_in": [
+    "out_of_scope",
+    "clarify"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "oos_bitcoin",
+  "query": "Harga bitcoin sekarang berapa?",
+  "expect": {
+   "intent_in": [
+    "out_of_scope",
+    "clarify",
+    "advice"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "clarify_gimana",
+  "query": "Gimana ya?",
+  "expect": {
+   "intent_in": [
+    "clarify",
+    "out_of_scope",
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "clarify_bank",
+  "query": "Bank",
+  "expect": {
+   "intent_in": [
+    "clarify",
+    "out_of_scope"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "clarify_analisis",
+  "query": "Analisis dong",
+  "expect": {
+   "intent_in": [
+    "clarify",
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "clarify_saham",
+  "query": "Saham",
+  "expect": {
+   "intent_in": [
+    "clarify",
+    "out_of_scope"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "clarify_bantu_riset",
+  "query": "Tolong bantu riset",
+  "expect": {
+   "intent_in": [
+    "clarify",
+    "about"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "research_roe",
+  "query": "Bandingkan ROE BBCA dan BBRI",
+  "expect": {
+   "intent_in": [
+    "peer_comparison"
+   ]
+  }
+ },
+ {
+  "id": "research_kinerja",
+  "query": "Bagaimana kinerja BBCA?",
+  "expect": {
+   "intent_in": [
+    "company_context"
+   ]
+  }
+ },
+ {
+  "id": "research_sector",
+  "query": "Disclosure sektor perbankan minggu depan",
+  "expect": {
+   "intent_in": [
+    "discovery"
+   ]
+  }
+ },
+ {
+  "id": "research_npl_en",
+  "query": "Compare NPL of BBCA and BMRI",
+  "expect": {
+   "intent_in": [
+    "peer_comparison"
+   ]
+  }
+ },
+ {
+  "id": "research_lowercase",
+  "query": "Kinerja bbri gimana?",
+  "expect": {
+   "intent_in": [
+    "company_context"
+   ]
+  }
+ },
+ {
+  "id": "research_corporate_action",
+  "query": "BBNI lagi ada aksi korporasi apa?",
+  "expect": {
+   "intent_in": [
+    "discovery",
+    "company_context"
+   ]
+  }
+ },
+ {
+  "id": "research_bank_bank",
+  "query": "Bandingkan NIM bank-bank besar",
+  "expect": {
+   "intent_in": [
+    "peer_comparison",
+    "discovery"
+   ]
+  }
+ },
+ {
+  "id": "research_advice_with_company",
+  "query": "Apakah BBCA layak dibeli?",
+  "expect": {
+   "intent_in": [
+    "company_context"
+   ],
+   "advice_requested": true
+  }
+ },
+ {
+  "id": "research_ambiguous",
+  "query": "Bank syariah minggu depan ada disclosure apa?",
+  "expect": {
+   "status_in": [
+    "needs_clarification"
+   ],
+   "max_tool_calls": 0
+  }
+ },
+ {
+  "id": "research_laba",
+  "query": "Tren laba BMRI",
+  "expect": {
+   "intent_in": [
+    "company_context"
+   ]
+  }
+ },
+ {
+  "id": "research_profitable_en",
+  "query": "Is BBRI profitable?",
+  "expect": {
+   "intent_in": [
+    "company_context"
+   ]
+  }
+ }
+]

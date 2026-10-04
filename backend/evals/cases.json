@@ -204,5 +204,38 @@
       "language": "en",
       "advice_requested": true
     }
+  },
+  {
+    "id": "scope_about_rules",
+    "query": "Lu siapa?",
+    "expect": {
+      "intent": "about",
+      "status_in": [
+        "needs_clarification"
+      ],
+      "max_tool_calls": 0
+    }
+  },
+  {
+    "id": "scope_judgement_rules",
+    "query": "Ada ga sih bank yang jelek?",
+    "expect": {
+      "intent": "advice",
+      "status_in": [
+        "needs_clarification"
+      ],
+      "max_tool_calls": 0
+    }
+  },
+  {
+    "id": "scope_pick_rules",
+    "query": "Menurutlu bank apa yang perlu gue analisis?",
+    "expect": {
+      "intent": "advice",
+      "status_in": [
+        "needs_clarification"
+      ],
+      "max_tool_calls": 0
+    }
   }
 ]
