@@ -27,18 +27,47 @@ class IntentProposal(BaseModel):
         description="True only when the user explicitly wants a plain list without deeper context.",
     )
     rationale: str = Field(description="One short sentence, no chain of thought.")
+    suggested_question: str | None = Field(
+        default=None,
+        description="For advice, clarify or about only: one concrete research question the "
+                    "assistant can answer, in the user's language. Null for other intents.",
+    )
 
 
 INTENT_SYSTEM = f"""{BOUNDARY}
 
-Classify the user's research request into exactly one intent:
+Classify the user's message into exactly one intent:
 - discovery: which disclosures / corporate events deserve attention for a sector,
   watchlist or timeframe.
 - peer_comparison: compare financial metrics across two or more companies or a sector.
 - company_context: financial context and recent events for one company.
-- clarify: the request cannot be scoped without asking the user.
+- about: the user asks who or what this assistant is, or what it can do, including
+  capability questions such as "can you analyse stocks?".
+- advice: the user asks for a judgement or a pick (good/bad/best bank, which one to buy
+  or analyse) without naming companies. Asking whether the assistant can do something
+  is about, not advice.
+- out_of_scope: anything unrelated to researching listed companies (small talk, other
+  topics, general knowledge, coding, personal requests).
+- clarify: about company research, but too vague to scope without asking the user.
 
-Entities and dates are resolved separately; only classify."""
+Choose a research intent only when the message is clearly about researching listed
+companies. When unsure, prefer clarify or out_of_scope. A rule-based guess is given as a
+hint; overrule it when the message means something else. Entities and dates are
+resolved separately; only classify.
+
+suggested_question (advice, clarify or about only): one research request this assistant
+can run, written as the user would type it to the assistant (never a question back to
+the user). Use one of three forms: the disclosures to watch, a comparison of financial
+metrics (ROE, ROA, NIM, NPL, CAR, LDR, CASA, growth), or one company's performance.
+Write it in the user's language, at most 120 characters. Name only companies the user
+named; otherwise refer to "bank di watchlist saya" / "banks on my watchlist" or to the
+banking sector. Never suggest buying, selling or holding, and never rank banks as good
+or bad. Null for out_of_scope and research intents. Examples:
+- "Ada bank yang jelek?" -> "Bandingkan NPL dan ROE bank di watchlist saya"
+- "kamu bisa analisis saham?" -> "Disclosure apa yang perlu saya pantau minggu depan untuk sektor perbankan?"
+- "Analisis dong" -> "Bagaimana kinerja bank di watchlist saya?"
+- "Is any bank in trouble?" -> "Compare NPL and CAR of banks on my watchlist"
+"""
 
 
 class PlanProposal(BaseModel):

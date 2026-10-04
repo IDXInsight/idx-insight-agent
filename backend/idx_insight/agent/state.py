@@ -15,7 +15,11 @@ from idx_insight.agent.language import Language
 from idx_insight.models import Claim, Event, Evidence, MetricValue
 from idx_insight.sectors.service import ToolCallRecord
 
-IntentName = Literal["discovery", "peer_comparison", "company_context", "clarify"]
+# Research intents fetch data; about / advice / out_of_scope / clarify are answered without
+# any Sectors call.
+IntentName = Literal["discovery", "peer_comparison", "company_context", "clarify",
+                     "about", "advice", "out_of_scope"]
+SCOPE_INTENTS = frozenset({"clarify", "about", "advice", "out_of_scope"})
 
 PlanStepName = Literal[
     "discover_events",
@@ -40,6 +44,8 @@ class Intent(BaseModel):
     metrics: list[str] = []
     unsupported_metrics: list[str] = []
     skip_second_hop: bool = False
+    # Research question the LLM suggests for a non-research message (validated in code).
+    suggestion: str | None = None
 
 
 class ResolvedCompany(BaseModel):
@@ -207,6 +213,8 @@ class Briefing(BaseModel):
     narrative: list[CitedSentence] | None = None
     synthesis_mode: Literal["template", "llm"] = "template"
     clarification_question: str | None = None
+    # Clickable research questions offered with a clarification or a scope answer.
+    suggestions: list[str] = []
 
 
 class AgentState(BaseModel):

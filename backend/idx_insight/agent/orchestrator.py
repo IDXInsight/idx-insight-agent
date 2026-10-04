@@ -32,11 +32,11 @@ from idx_insight.agent.entities import EntityResolver
 from idx_insight.agent.financials import FinancialContext
 from idx_insight.agent.i18n import t
 from idx_insight.agent.intent import requested_metrics, resolve_intent
-from idx_insight.agent.language import Language, detect_language
+from idx_insight.agent.language import Language, detect_language, unsupported_script
 from idx_insight.agent.llm_gateway import AgentLLM
 from idx_insight.agent.planner import build_plan
 from idx_insight.agent.relevance import decide_second_hop, rank_events
-from idx_insight.agent.state import AgentState, Briefing, RecoveryAction
+from idx_insight.agent.state import AgentState, Briefing, Intent, RecoveryAction
 from idx_insight.agent.synthesis import synthesize
 from idx_insight.agent.timeframe import resolve_timeframe
 from idx_insight.agent.validator import EvidenceValidator
@@ -77,7 +77,7 @@ class _Run:
         s.add_trace("Entities resolved", t(lang, "trace.entities",
                                            companies=", ".join(s.entities.symbols) or "-",
                                            sector=s.entities.sub_sector or "-"))
-        s.intent = resolve_intent(s.query, s.entities, self.llm)
+        s.intent = resolve_intent(s.query, s.entities, self.llm, lang)
         s.add_trace("Intent resolved", t(lang, "trace.intent", name=s.intent.name,
                                          source=s.intent.source, confidence=s.intent.confidence))
         if s.intent.advice_requested:
@@ -93,6 +93,9 @@ class _Run:
         """Recovery gates that must stop the run before any data is fetched."""
         s, lang = self.state, self.lang
         assert s.intent is not None
+        # Not a research request: answer from a fixed template, before any data is fetched.
+        if s.intent.name in ("about", "advice", "out_of_scope"):
+            return t(lang, f"reply.{s.intent.name}")
         if s.entities.ambiguous:
             for a in s.entities.ambiguous:
                 self.recovery("ambiguous_company", a.text, "recovery.ambiguous.action",
@@ -246,6 +249,16 @@ class InsightAgent:
                            watchlist=[w.upper() for w in (watchlist or [])],
                            requested_sub_sector=sub_sector)
         run = _Run(self, state)
+        if unsupported_script(query):
+            # Neither Indonesian nor English: one bilingual reply, nothing is fetched or asked.
+            state.intent = Intent(name="out_of_scope", confidence="high")
+            reply = t(state.language, "reply.language")
+            state.status = "needs_clarification"
+            state.briefing = Briefing(title=t(state.language, "clarification.title"), summary=reply,
+                                      boundary_note=t(state.language, "briefing.boundary"),
+                                      clarification_question=reply)
+            state.add_trace("Unsupported language", reply, "warning")
+            return state
         run.resolve()
 
         question = run.clarification()
@@ -254,7 +267,9 @@ class InsightAgent:
             state.briefing = Briefing(title=t(state.language, "clarification.title"),
                                       summary=question,
                                       boundary_note=t(state.language, "briefing.boundary"),
-                                      clarification_question=question)
+                                      clarification_question=question,
+                                      suggestions=[state.intent.suggestion]
+                                      if state.intent and state.intent.suggestion else [])
             state.add_trace("Clarification requested", question, "warning")
             state.tool_calls = list(run.service.calls)
             return state
