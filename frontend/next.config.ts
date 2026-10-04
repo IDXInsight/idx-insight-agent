@@ -30,6 +30,10 @@ const nextConfig: NextConfig = {
   // The repository root holds the Python backend; keep Next.js scoped to this folder.
   turbopack: { root: process.cwd() },
   poweredByHeader: false,
+  // One landing page with sections; the short URL points at its glossary section.
+  async redirects() {
+    return [{ source: "/glosarium", destination: "/#glosarium", permanent: false }];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

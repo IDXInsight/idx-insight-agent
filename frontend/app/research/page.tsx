@@ -3,24 +3,27 @@
 import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Activity, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, BookOpen, Check, ChevronRight, CircleHelp, Clock3, FileCheck2, History, Layers3, LayoutDashboard, LoaderCircle, PanelLeftClose, Plus, PowerOff, Search, ShieldCheck, Sparkles, Target, Trash2, TrendingUp, X } from "lucide-react";
-import AnimatedWaveFooter from "@/components/ui/animated-wave-footer";
+import AnimatedWaveFooter, { type StartView } from "@/components/ui/animated-wave-footer";
 import { FlipButton } from "@/components/ui/flip-button";
 import { DraggableWidgetGrid } from "@/components/ui/draggable-widget-grid";
 import LiveResult, { type LiveEvidence, secondHopLabel } from "@/components/live-result";
 import TickerMark from "@/components/ticker-mark";
 import { type AgentResponse, type AgentStatus, type MetricInfo, type ResultView, formatEvidenceValue, formatPercent, isUrl, periodLabel, viewForIntent } from "@/lib/agent";
 import { clearHistory, listHistory, saveHistory } from "@/lib/history";
-import { type Lang, type MessageKey, isLang, numberLocale, t } from "@/lib/i18n";
+import { LANG_STORAGE_KEY, type Lang, type MessageKey, isLang, numberLocale, t } from "@/lib/i18n";
 import { colorOrder } from "@/lib/palette";
 import {
-  DEFAULT_WATCHLIST, type HistoryEntry, MAX_WATCHLIST, addToHistory, guessIntent, isHistory, isTickerList,
+  DEFAULT_WATCHLIST, type HistoryEntry, MAX_WATCHLIST, addToHistory, guessIntent, isHistory, isTickerList, nextStep,
   parseTickers, readStored, watchlistForQuery, writeStored,
 } from "@/lib/research";
 
 type View = "workspace" | ResultView;
 
-const STORAGE = { lang: "idx-insight.lang", watchlist: "idx-insight.watchlist", history: "idx-insight.history", metrics: "idx-insight.metrics" };
+const STORAGE = { lang: LANG_STORAGE_KEY, watchlist: "idx-insight.watchlist", history: "idx-insight.history", metrics: "idx-insight.metrics" };
 const RESULT_VIEWS: ResultView[] = ["discovery", "peers", "company"];
+// Answers that are not research results: shown under the research box, not kept in history.
+type ReplyKind = "about" | "advice" | "out_of_scope" | "clarify";
+const REPLY_KINDS: ReplyKind[] = ["about", "advice", "out_of_scope", "clarify"];
 const PROXY_ERRORS = ["not_configured", "invalid_request", "backend_unavailable", "timeout", "rate_limited", "daily_limit", "backend_error"] as const;
 const viewIcon = { workspace: LayoutDashboard, discovery: Layers3, peers: BarChart3, company: BookOpen };
 const intentIcon = { discovery: Layers3, peers: BarChart3, company: Search };
@@ -28,7 +31,9 @@ const titleKey: Record<View, MessageKey> = { workspace: "title.workspace", disco
 const navKey: Record<View, MessageKey> = { workspace: "nav.workspace", discovery: "nav.discovery", peers: "nav.peers", company: "nav.company" };
 const exampleKey: Record<ResultView, MessageKey> = { discovery: "example.discovery", peers: "example.peers", company: "example.company" };
 const shortExampleKey: Record<ResultView, MessageKey> = { discovery: "example.discoveryShort", peers: "example.peersShort", company: "example.companyShort" };
-const traceSteps: [MessageKey, MessageKey][] = [["trace.s1", "trace.s1d"], ["trace.s2", "trace.s2d"], ["trace.s3", "trace.s3d"], ["trace.s4", "trace.s4d"], ["trace.s5", "trace.s5d"], ["trace.s6", "trace.s6d"]];
+function isResultView(value: string | null): value is ResultView {
+  return value === "discovery" || value === "peers" || value === "company";
+}
 
 function isMetricInfo(value: unknown): value is Record<string, MetricInfo> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -47,13 +52,15 @@ export default function Home() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<View>("workspace");
   const [query, setQuery] = useState("");
+  // Research type chosen from the footer or a tab while the question is still empty.
+  const [picked, setPicked] = useState<ResultView | null>(null);
+  const [reply, setReply] = useState<{ kind: ReplyKind; message: string; suggestions: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
   const [menu, setMenu] = useState(false);
   const [evidence, setEvidence] = useState<LiveEvidence | null>(null);
   const [trace, setTrace] = useState(false);
-  const [help, setHelp] = useState(false);
   const [editWatchlist, setEditWatchlist] = useState(false);
   const [tickerInput, setTickerInput] = useState("");
   const [tickerError, setTickerError] = useState("");
@@ -62,7 +69,7 @@ export default function Home() {
   const queryRef = useRef<HTMLTextAreaElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  const overlay = !!evidence || trace || help || editWatchlist;
+  const overlay = !!evidence || trace || editWatchlist;
   const offline = status !== null && !status.live;
   // A result view shows the result opened from the history, else the latest result of that type.
   const entry = view === "workspace" ? null
@@ -71,8 +78,14 @@ export default function Home() {
   const order = colorOrder(watchlist, result ? [...result.scope.companies, ...Object.values(result.peer_comparison).flatMap(p => Object.keys(p.values))] : []);
   const scoped = watchlistForQuery(query, watchlist);
   const detected = guessIntent(query, watchlist);
+  const selectedType = detected ?? (query.trim() ? null : picked);
   // The watchlist shows ROE only when the open result has it for a watchlist company.
   const roe = watchlist.some(symbol => result?.peer_comparison.roe?.values[symbol] !== undefined) ? result?.peer_comparison.roe : undefined;
+  // One context-aware follow-up for the open result (fills the box, never runs by itself).
+  const next = entry && result ? nextStep(entry.view, result.scope.companies, result.events.map(e => e.symbol), watchlist) : null;
+  const nextQuery = next && (next.kind === "company"
+    ? t(lang, "example.companyFor", { t: next.companies[0] })
+    : t(lang, next.kind === "disclosure" ? "next.disclosure" : "next.compare", { list: next.companies.join(", ") }));
   const statusLabel = status === null ? t(lang, "status.connecting") : !status.live ? t(lang, "status.offline") : status.dataSource === "mock" ? t(lang, "status.mock") : t(lang, "status.sectors");
 
   // Preferences and history live in this browser only. Migrate older localStorage history.
@@ -99,8 +112,11 @@ export default function Home() {
       }).catch(() => { if (mounted) setHistoryError(t(storedLang, "history.storageError")); });
       setMetrics(readStored(STORAGE.metrics, {}, isMetricInfo));
       setToday(longDate(storedLang));
-      const requestedView = new URLSearchParams(window.location.search).get("view");
-      if (requestedView === "workspace" || requestedView === "discovery" || requestedView === "peers" || requestedView === "company") setView(requestedView);
+      const params = new URLSearchParams(window.location.search);
+      const start = params.get("start");
+      const requestedView = params.get("view");
+      if (start === "workspace" || isResultView(start)) setPicked(isResultView(start) ? start : null);
+      else if (requestedView === "workspace" || isResultView(requestedView)) setView(requestedView);
       loaded.current = true;
     });
     const controller = new AbortController();
@@ -119,7 +135,7 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [busy]);
 
-  function closeOverlays() { setEvidence(null); setTrace(false); setHelp(false); setEditWatchlist(false); setTickerError(""); }
+  function closeOverlays() { setEvidence(null); setTrace(false); setEditWatchlist(false); setTickerError(""); }
   useEffect(() => {
     if (!overlay) return;
     const previous = document.activeElement as HTMLElement;
@@ -141,17 +157,23 @@ export default function Home() {
 
   function changeLang(next: Lang) { setLang(next); writeStored(STORAGE.lang, next); setToday(longDate(next)); }
   function navigate(next: View) { setView(next); setMenu(false); setError(""); window.scrollTo({ top: 0 }); }
-  function ask(text: string) { setQuery(text); navigate("workspace"); requestAnimationFrame(() => queryRef.current?.focus()); }
+  function ask(text: string) { setQuery(text); setReply(null); navigate("workspace"); requestAnimationFrame(() => queryRef.current?.focus()); }
+  /** A new, empty research; with a type, its tab is selected and its example is the placeholder. */
+  function startNew(type: StartView) {
+    setPicked(type === "workspace" ? null : type);
+    ask("");
+  }
   function openEntry(e: HistoryEntry) { setActiveId(e.id); navigate(e.view); }
 
   async function research() {
     const text = query.trim();
     if (text.length < 3) { setError(t(lang, "error.short")); queryRef.current?.focus(); return; }
-    setError(""); setBusy(true); setElapsed(0);
+    setError(""); setReply(null); setBusy(true); setElapsed(0);
     try {
       const response = await fetch("/api/agent/query", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: text, watchlist: scoped, language: lang }),
+        // The backend detects the question's language; the interface then follows it.
+        body: JSON.stringify({ query: text, watchlist: scoped }),
       });
       const body = await response.json().catch(() => ({})) as AgentResponse & { error?: unknown };
       if (!response.ok) {
@@ -161,8 +183,14 @@ export default function Home() {
         setError(t(lang, `error.${code}`));
         return;
       }
+      if (isLang(body.language) && body.language !== lang) changeLang(body.language);
+      if (body.status === "needs_clarification") {
+        const kind = REPLY_KINDS.find(k => k === body.scope.intent) ?? "clarify";
+        setReply({ kind, message: body.briefing.clarification_question ?? body.briefing.summary, suggestions: body.briefing.suggestions ?? [] });
+        return;
+      }
       const next: HistoryEntry = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, query: text, language: lang,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, query: text, language: isLang(body.language) ? body.language : lang,
         askedAt: new Date().toISOString(), view: viewForIntent(body.scope.intent, detected ?? "discovery"), response: body,
       };
       setHistory(prev => addToHistory(prev, next));
@@ -202,7 +230,7 @@ export default function Home() {
   return <div className="app-shell">
     <aside className={`sidebar ${menu ? "mobile-open" : ""}`}>
       <Link className="brand" href="/"><span className="brand-symbol"><Activity size={22} /></span><span>idx<span className="brand-light">insight</span><small>{t(lang, "brand.tagline")}</small></span></Link>
-      <button className="new-research" onClick={() => ask("")}><Plus size={16} /> {t(lang, "nav.new")} <span>↗</span></button>
+      <button className="new-research" onClick={() => startNew("workspace")}><Plus size={16} /> {t(lang, "nav.new")} <span>↗</span></button>
       <div className="nav-label">{t(lang, "nav.label")}</div>
       <nav aria-label={t(lang, "nav.main")}>
         {(["workspace", ...RESULT_VIEWS] as View[]).map(id => { const Icon = viewIcon[id]; return <button key={id} className={`nav-item ${view === id ? "active" : ""}`} aria-current={view === id ? "page" : undefined} onClick={() => navigate(id)}><Icon size={17} />{t(lang, navKey[id])}{view === id && <span className="nav-dot" />}</button>; })}
@@ -212,7 +240,7 @@ export default function Home() {
         {historyError && <p className="history-empty" role="alert">{historyError}</p>}
         {history.length === 0 ? <p className="history-empty">{t(lang, "history.empty")}</p> : <ul className="history-list">{history.map(e => { const Icon = intentIcon[e.view]; return <li key={e.id}><button className={entry?.id === e.id ? "active" : ""} onClick={() => openEntry(e)} title={e.query}><Icon size={13} /><span><strong>{e.query}</strong><small>{askedAt(e.askedAt)} · {e.language.toUpperCase()}</small></span></button></li>; })}</ul>}
       </div>
-      <div className="sidebar-bottom"><Link className="nav-item" href="/#glosarium"><BookOpen size={17} /> {t(lang, "nav.glossary")} <ArrowUpRight size={14} /></Link><button className="nav-item" onClick={() => setHelp(true)}><CircleHelp size={17} /> {t(lang, "sidebar.guide")} <ArrowUpRight size={14} /></button><div className="profile"><span className="avatar">R</span><div>{t(lang, "profile.name")}<small>{t(lang, "profile.sub")}</small></div></div></div>
+      <div className="sidebar-bottom"><Link className="nav-item" href="/#glosarium"><BookOpen size={17} /> {t(lang, "nav.glossary")} <ArrowUpRight size={14} /></Link><Link className="nav-item" href="/#cara-kerja"><CircleHelp size={17} /> {t(lang, "sidebar.guide")} <ArrowUpRight size={14} /></Link><div className="profile"><span className="avatar">R</span><div>{t(lang, "profile.name")}<small>{t(lang, "profile.sub")}</small></div></div></div>
     </aside>
     <div className="main-shell">
       <header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-toggle" aria-label={t(lang, "nav.open")} aria-expanded={menu} onClick={() => setMenu(!menu)}><PanelLeftClose size={18} /></button><span>Workspace</span><ChevronRight size={13} /><strong>{t(lang, titleKey[view])}</strong></div>
@@ -228,16 +256,24 @@ export default function Home() {
             : status === null ? t(lang, "note.connecting") : status.live && status.dataSource === "mock" ? t(lang, "note.mock") : t(lang, "note.live")}</span></div>}
         {view === "workspace" ? <section className="research-box" aria-labelledby="research-title">
           <div className="research-box-top"><span className="label-with-icon" id="research-title"><Sparkles size={17} /> {t(lang, "box.title")}</span><span className="muted mini">{t(lang, "box.tag")}</span></div>
-          <div className="intent-row"><div className="intent-tabs" role="group" aria-label={t(lang, "box.types")}>{RESULT_VIEWS.map(id => { const Icon = intentIcon[id]; return <button key={id} className={detected === id ? "selected" : ""} aria-pressed={detected === id} onClick={() => ask(t(lang, exampleKey[id]))}><Icon size={14} />{t(lang, `intent.${id}`)}</button>; })}</div>
+          <div className="intent-row"><div className="intent-tabs" role="group" aria-label={t(lang, "box.types")}>{RESULT_VIEWS.map(id => { const Icon = intentIcon[id]; return <button key={id} className={selectedType === id ? "selected" : ""} aria-pressed={selectedType === id} onClick={() => { setPicked(id); ask(t(lang, exampleKey[id])); }}><Icon size={14} />{t(lang, `intent.${id}`)}</button>; })}</div>
             <span className="intent-hint">{detected ? <><Check size={11} /> {t(lang, "box.detected")}</> : t(lang, "box.typeHint")}</span></div>
-          <label className="sr-only" htmlFor="query">{t(lang, "box.label")}</label><textarea id="query" ref={queryRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !busy && !offline) void research(); }} placeholder={t(lang, "example.discovery")} maxLength={500} disabled={offline} />
-          <div className="query-footer"><div className="query-context"><span><Target size={13} /> {query.trim() && !scoped.length ? t(lang, "box.scopeQuery") : t(lang, "box.scopeWatchlist", { n: watchlist.length })}</span><span><Clock3 size={13} /> {t(lang, "box.period")}</span></div>
+          <label className="sr-only" htmlFor="query">{t(lang, "box.label")}</label><textarea id="query" ref={queryRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !busy && !offline) void research(); }} placeholder={t(lang, exampleKey[picked ?? "discovery"])} maxLength={500} disabled={offline} />
+          <div className="query-footer"><div className="query-context">{(!query.trim() || detected) && <span><Target size={13} /> {query.trim() && !scoped.length ? t(lang, "box.scopeQuery") : t(lang, "box.scopeWatchlist", { n: watchlist.length })}</span>}<span><Clock3 size={13} /> {t(lang, "box.period")}</span></div>
             <FlipButton className="primary-button" iconPosition="start" onClick={() => void research()} disabled={busy || offline || status === null} label={busy ? t(lang, "box.busy", { s: elapsed }) : offline ? t(lang, "box.offline") : t(lang, "box.run")} icon={busy ? <LoaderCircle size={15} className="spin" /> : offline ? <PowerOff size={15} /> : <Sparkles size={15} />} /></div>
           {error && <p className="form-error" role="alert">{error}</p>}
-        </section> : entry && <section className="result-query"><span className="query-orb"><Sparkles size={19} /></span><div><span className="eyebrow">{t(lang, "result.question")}</span><p>{entry.query}</p><div className="muted mini">{result?.scope.companies.join(" · ") || "—"} <span className="dot-separator">/</span> {t(lang, "result.asked", { time: askedAt(entry.askedAt) })}</div></div><div className="result-actions"><FlipButton className="secondary-button" iconPosition="start" onClick={() => ask(entry.query)} label={t(lang, "result.edit")} icon={<ArrowLeft size={14} />} /><FlipButton className="secondary-button" iconPosition="start" onClick={() => ask(t(lang, "example.peers"))} label={t(lang, "result.compareFour")} icon={<BarChart3 size={14} />} /></div></section>}
+        </section> : entry && <section className="result-query"><span className="query-orb"><Sparkles size={19} /></span><div><span className="eyebrow">{t(lang, "result.question")}</span><p>{entry.query}</p><div className="muted mini">{result?.scope.companies.join(" · ") || "—"} <span className="dot-separator">/</span> {t(lang, "result.asked", { time: askedAt(entry.askedAt) })}</div></div><div className="result-actions"><FlipButton className="secondary-button" iconPosition="start" onClick={() => ask(entry.query)} label={t(lang, "result.edit")} icon={<ArrowLeft size={14} />} />{next && nextQuery && <FlipButton className="secondary-button" iconPosition="start" onClick={() => ask(nextQuery)} label={t(lang, `result.next.${next.kind}`, { t: next.companies[0] })} icon={next.kind === "disclosure" ? <Layers3 size={14} /> : <BarChart3 size={14} />} />}</div></section>}
         <div className="content-grid"><div className="primary-column">
           {view === "workspace" && <>
-            <div className="suggestions"><span className="muted mini">{t(lang, "suggest.label")}</span>{RESULT_VIEWS.map(id => <button key={id} onClick={() => ask(t(lang, exampleKey[id]))}>{t(lang, shortExampleKey[id])} <ArrowUpRight size={13} /></button>)}</div>
+            {reply && <section className={`panel scope-reply ${reply.kind}`} role="status" aria-live="polite"><div className="scope-reply-head"><span className="eyebrow">{reply.kind === "advice" ? <ShieldCheck size={12} /> : <Sparkles size={12} />} {t(lang, `reply.label.${reply.kind}`)}</span><button className="icon-button tiny" aria-label={t(lang, "drawer.close")} onClick={() => setReply(null)}><X size={13} /></button></div><p>{reply.message}</p>
+              <div className="suggestions"><span className="muted mini">{t(lang, "reply.try")}</span>{[...new Set([
+                // The agent's own suggestion first, then fixed examples.
+                ...reply.suggestions,
+                ...(reply.kind === "advice"
+                  ? [t(lang, "suggest.npl", { list: (watchlist.length >= 2 ? watchlist : DEFAULT_WATCHLIST).slice(0, 4).join(", ") }), t(lang, "suggest.roe", { list: (watchlist.length >= 2 ? watchlist : DEFAULT_WATCHLIST).slice(0, 4).join(", ") })]
+                  : RESULT_VIEWS.map(id => t(lang, exampleKey[id]))),
+              ])].slice(0, 3).map((text, i) => <button key={text} className={i < reply.suggestions.length ? "agent-suggestion" : undefined} onClick={() => ask(text)}>{i < reply.suggestions.length && <Sparkles size={12} />}{text} <ArrowUpRight size={13} /></button>)}</div></section>}
+            {!reply && <div className="suggestions"><span className="muted mini">{t(lang, "suggest.label")}</span>{RESULT_VIEWS.map(id => <button key={id} onClick={() => ask(t(lang, exampleKey[id]))}>{t(lang, shortExampleKey[id])} <ArrowUpRight size={13} /></button>)}</div>}
             {history.length > 0 && <section className="panel recent-panel"><div className="section-header"><div><span className="eyebrow"><History size={11} /> {t(lang, "history.saved").toUpperCase()}</span><h2>{t(lang, "recent.title")}</h2></div><span className="small-counter">{history.length}</span></div>
               <ul className="recent-list">{history.slice(0, 6).map(e => { const Icon = intentIcon[e.view]; return <li key={e.id}><button onClick={() => openEntry(e)}><span className="recent-icon"><Icon size={14} /></span><span className="recent-text"><strong>{e.query}</strong><small>{t(lang, titleKey[e.view])} · {askedAt(e.askedAt)} · {t(lang, `live.status.${e.response.status}`)}</small></span><ArrowUpRight size={14} /></button></li>; })}</ul></section>}
           </>}
@@ -250,14 +286,16 @@ export default function Home() {
           {watchlist.map(symbol => <div className="watchlist-row" key={symbol}><button className="watchlist-identity" onClick={() => ask(t(lang, "example.companyFor", { t: symbol }))} aria-label={t(lang, "watch.prepare", { t: symbol })}><TickerMark symbol={symbol} order={order} /><span><strong>{symbol}</strong><small>{symbol}.JK</small></span></button>{roe && <span className="watchlist-value">{roe.values[symbol] === undefined ? "—" : formatPercent(roe.values[symbol], lang)}</span>}</div>)}
           {!watchlist.length && <p className="empty-watchlist">{t(lang, "watch.empty")}</p>}
           <button className="add-watchlist" onClick={() => setEditWatchlist(true)}><Plus size={14} /> {t(lang, "watch.manage")}</button><p className="watchlist-caption">{t(lang, roe ? "watch.captionValue" : "watch.caption")}</p></section>
-          <section key="agent" className="agent-card"><div className="agent-icon"><Sparkles size={21} /></div><span className="eyebrow">{t(lang, "agent.eyebrow")}</span><h2>{t(lang, "agent.title1")}<br />{t(lang, "agent.title2")}</h2><p>{t(lang, "agent.text")}</p><div className="agent-steps"><span><Search size={13} /> {t(lang, "agent.step1")}</span><ChevronRight size={12} /><span><TrendingUp size={13} /> {t(lang, "agent.step2")}</span><ChevronRight size={12} /><span><FileCheck2 size={13} /> {t(lang, "agent.step3")}</span></div><button className="text-button" onClick={() => setTrace(true)}>{t(lang, "agent.explore")} <ArrowRight size={14} /></button></section>
+          <section key="agent" className="agent-card"><div className="agent-icon"><Sparkles size={21} /></div><span className="eyebrow">{t(lang, "agent.eyebrow")}</span><h2>{t(lang, "agent.title1")}<br />{t(lang, "agent.title2")}</h2><p>{t(lang, "agent.text")}</p><div className="agent-steps"><span><Search size={13} /> {t(lang, "agent.step1")}</span><ChevronRight size={12} /><span><TrendingUp size={13} /> {t(lang, "agent.step2")}</span><ChevronRight size={12} /><span><FileCheck2 size={13} /> {t(lang, "agent.step3")}</span></div>{result
+            ? <button className="text-button" onClick={() => setTrace(true)}>{t(lang, "agent.explore")} <ArrowRight size={14} /></button>
+            : <Link className="text-button" href="/#journey">{t(lang, "agent.explore")} <ArrowRight size={14} /></Link>}</section>
           <section key="source" className="source-card"><a href="https://sectors.app/" target="_blank" rel="noopener noreferrer"><span className="sectors-logo">S</span><strong>{t(lang, "source.title")}</strong><ArrowUpRight size={13} /><span className="sr-only">{t(lang, "newTab")}</span></a><p>{t(lang, offline ? "source.offline" : "source.live")}</p><span><ShieldCheck size={13} /> {t(lang, "source.always")}</span></section>
         </DraggableWidgetGrid></aside></div>
       </main>
-      <AnimatedWaveFooter activeView={view} onNavigate={navigate} onNewResearch={() => ask("")} onOpenGuide={() => setHelp(true)} onOpenTrace={() => setTrace(true)} lang={lang} statusLabel={statusLabel} />
+      <AnimatedWaveFooter activeView={view} onStart={startNew} lang={lang} statusLabel={statusLabel} />
     </div>
-    {overlay && <div className="overlay"><section role="dialog" aria-modal="true" aria-labelledby="drawer-title" className={`drawer ${editWatchlist || help ? "small-dialog" : ""}`}><div className="drawer-top"><span className="eyebrow">{t(lang, evidence ? "drawer.evidence" : trace ? "drawer.trace" : editWatchlist ? "drawer.watchlist" : "drawer.guide")}</span><button ref={closeRef} className="icon-button" aria-label={t(lang, "drawer.close")} onClick={closeOverlays}><X size={19} /></button></div>
-      <h2 id="drawer-title">{evidence?.title || t(lang, trace ? "trace.title" : editWatchlist ? "watch.dialogTitle" : "help.title")}</h2>
+    {overlay && <div className="overlay"><section role="dialog" aria-modal="true" aria-labelledby="drawer-title" className={`drawer ${editWatchlist ? "small-dialog" : ""}`}><div className="drawer-top"><span className="eyebrow">{t(lang, evidence ? "drawer.evidence" : trace ? "drawer.trace" : "drawer.watchlist")}</span><button ref={closeRef} className="icon-button" aria-label={t(lang, "drawer.close")} onClick={closeOverlays}><X size={19} /></button></div>
+      <h2 id="drawer-title">{evidence?.title || t(lang, trace ? "trace.title" : "watch.dialogTitle")}</h2>
       {evidence && <><div className="drawer-badge"><FileCheck2 size={15} /> {evidence.ticker}{evidence.period ? ` · ${evidence.period}` : ""}</div>
         {evidence.reasons?.length ? <><p className="drawer-description">{t(lang, "evidence.reasons")}</p><ul className="reason-list">{evidence.reasons.map(r => <li key={r}>{r}</li>)}</ul></> : null}
         {evidence.secondHop && <p className="drawer-description">{t(lang, "evidence.secondHop", { x: secondHopLabel(evidence.secondHop, lang) ?? "" })}</p>}
@@ -275,7 +313,6 @@ export default function Home() {
         {evidence.sourceRef && isUrl(evidence.sourceRef) && !evidence.items.some(i => i.source_ref === evidence.sourceRef) && <a className="secondary-button full-width" href={evidence.sourceRef} target="_blank" rel="noopener noreferrer">{t(lang, "evidence.openSource")} <ArrowUpRight size={14} /></a>}
       </>}
       {trace && result && <><p className="drawer-description">{t(lang, "trace.live", { n: result.tool_calls.length, llm: result.llm_provider !== "none" ? t(lang, "trace.llm", { p: result.llm_provider }) : t(lang, "trace.noLlm") })}</p><ol className="trace-list">{result.trace.map((step, i) => <li key={`${step.stage}-${i}`}><span className={step.status === "ok" ? "" : "trace-warn"}>{String(i + 1).padStart(2, "0")}</span><div><h3>{step.stage}</h3><p>{step.detail || step.status}</p></div></li>)}</ol></>}
-      {trace && !result && <><p className="drawer-description">{t(lang, "trace.generic")}</p><ol className="trace-list">{traceSteps.map(([title, detail], i) => <li key={title}><span>{String(i + 1).padStart(2, "0")}</span><div><h3>{t(lang, title)}</h3><p>{t(lang, detail)}</p></div></li>)}</ol></>}
       {editWatchlist && <><p className="drawer-description">{t(lang, "watch.dialogText")}</p>
         <form className="ticker-form" onSubmit={addTickers}><label className="sr-only" htmlFor="ticker-input">{t(lang, "watch.input")}</label><input id="ticker-input" value={tickerInput} onChange={e => { setTickerInput(e.target.value); setTickerError(""); }} placeholder={t(lang, "watch.placeholder")} autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={120} aria-invalid={!!tickerError} aria-describedby={tickerError ? "ticker-error" : undefined} /><button type="submit" className="secondary-button" disabled={!tickerInput.trim()}><Plus size={14} /> {t(lang, "watch.add")}</button></form>
         {tickerError && <p className="form-error" id="ticker-error" role="alert">{tickerError}</p>}
@@ -283,7 +320,6 @@ export default function Home() {
         <p className="watch-note">{t(lang, "watch.note")}</p>
         <p className="logo-attribution">Logo: <a href="https://www.bca.co.id/id/tentang-bca/media-riset/pressroom/brand-assets" target="_blank" rel="noopener noreferrer">BCA</a> · <a href="https://commons.wikimedia.org/wiki/File:BRI_2025.svg" target="_blank" rel="noopener noreferrer">BRI</a> · <a href="https://www.bankmandiri.co.id/brandguideline" target="_blank" rel="noopener noreferrer">Mandiri</a> · <a href="https://commons.wikimedia.org/wiki/File:Bank_Negara_Indonesia_logo_(2004).svg" target="_blank" rel="noopener noreferrer">BNI</a>.</p>
         <FlipButton className="primary-button full-width" onClick={closeOverlays} label={t(lang, "watch.done", { n: watchlist.length })} icon={<Check size={15} />} /></>}
-      {help && <><p className="drawer-description">{t(lang, "help.text")}</p><div className="help-items"><p><strong>{t(lang, "help.i1")}</strong>{t(lang, "help.i1d")}</p><p><strong>{t(lang, "help.i2")}</strong>{t(lang, "help.i2d")}</p><p><strong>{t(lang, "help.i3")}</strong>{t(lang, "help.i3d")}</p></div><div className="data-note"><ShieldCheck size={17} /><p>{t(lang, "help.note")}</p></div></>}
     </section></div>}
   </div>;
 }

@@ -119,3 +119,28 @@ reported as malformed.
 | Peer comparison crashed when every data call failed | Fixed, with a test |
 | Real-data discovery cases expect second-hop research in every week | Fixed: research is required only for events at or above the threshold; replayed from the cache, 8/8 (0 credits) |
 | Not yet tested live: Groq rate-limit fallback, Redis unavailable, timeouts | Covered by unit tests only |
+
+## Run 4 — local, mock data + Groq: non-research questions and languages (2026-10-05)
+
+Messages a visitor might type that are not research requests. Mock data, so no Sectors
+credits; only Groq quota.
+
+| Message | Before | After |
+|---|---|---|
+| "Lu siapa?", "kamu sejago apa", "kamu bisa analisis saham?" | Four-bank comparison, or "name a company" | About the agent, with suggested research questions; no Sectors call |
+| "Ada ga sih bank yang jelek?", "Menurutlu bank apa yang perlu gue analisis?" | Four-bank comparison (12 Sectors calls) or discovery (8) | Not investment advice: the agent offers data instead ("Bandingkan NPL dan ROE bank di watchlist saya"); no Sectors call |
+| "Resep nasi goreng", "Cuaca Jakarta" | Clarification | Outside my scope, with what the agent can do |
+| "BCAとBRIを比較する", "あなたは誰ですか" | "Companies not found" / English reply | "Indonesian and English only" in both languages; no LLM or Sectors call |
+
+### Findings
+
+| Finding | Follow-up |
+|---|---|
+| The UI sent the watchlist with every question without tickers, so small talk ran a four-bank analysis (about 8 credits on the deployment) | Fixed: the watchlist goes only with research questions |
+| The agent had no category for questions outside research | Fixed: the LLM routes unclear messages to about / advice / out_of_scope / clarify; fixed bilingual templates answer them before any data call |
+| Keyword rules misread new phrasings (e.g. a capability question read as advice) | Fixed: rules are now hints and the fallback; the LLM decides |
+| LLM-suggested questions were sometimes questions back to the user | Fixed: suggestions must be runnable research requests, short and advice-free, or they are dropped |
+| The answer followed the interface toggle, not the question's language | Fixed: the language is detected per question and the interface follows |
+| "Compare 4 banks" in every result header ignored the result | Replaced by a context-aware follow-up |
+
+Scope evaluation (`evals/cases_scope.json`, 44 messages): 44/44 with Groq.

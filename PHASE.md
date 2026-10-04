@@ -295,30 +295,32 @@ User
 Phases 4 and 5.
 
 ### Status (updated 2026-10-05)
-In progress. Three real-data end-to-end runs were recorded on 2026-10-02 (see
-`docs/e2e-validation.md`); the earlier deployment smoke test covered two questions.
-Local regression testing now covers prompt injection, fabricated cited prose,
-mandatory research steps, cross-origin requests, forged proxy IPs, oversized JSON,
-internal-key authentication and usage limits. The latest local run passed 302 backend
-and 24 frontend tests; Ruff passed on the changed backend files, and an offline npm
-audit reported no advisories.
-A scan of tracked files found no key-pattern matches, but Git history and GitHub
-secret scanning have not been checked.
+In progress. Recorded in `docs/e2e-validation.md`:
 
-On 2026-10-05 a previously built local frontend returned HTTP 200 for `/` and
-`/research`, connected to a mock/rules-only backend, and answered a sample peer
-question without Sectors or LLM usage. That build predates the latest proxy security
-edits; this is a visual/connectivity check, not verification of the current source.
+- Runs 1–3 (2026-10-02, real data, local and deployed): 11 questions including
+  non-bank companies and English; real-data evaluation 8/8; failure cases (invalid
+  input, missing or wrong secret, firewall rate limit, credit cap, backend offline).
+  Fixed: cost-to-income parsing, mixed ratio units, credit-cap message, a crash when
+  every data call fails, the firewall's 429 message.
+- Run 4 (2026-10-05, local, mock data + Groq): non-research messages, capability
+  questions and other languages. The LLM now routes unclear messages (about, advice,
+  out of scope, clarify) and they are answered before any Sectors call; the question's
+  language is detected and the interface follows. Scope evaluation 44/44.
+- Security branch review (2026-10-05): same-origin, content-type and body-size checks
+  in the proxy verified locally; prompt-injection hardening covered by tests. Vercel
+  Preview no longer reaches the production backend (backend variables are
+  Production-only).
+
 Open:
-- re-run of the 8 real-data evaluation cases; every Sectors endpoint through the
-  deployed product (sector-wide discovery, NPL via the screener, ambiguous names,
-  unknown tickers); a sample of values cross-checked against the Sectors app
-- questions about non-bank companies (the metric catalogue and evaluation are bank-focused)
-- failure cases (Groq rate limit, credit cap, Redis unavailable, timeouts), latency and
-  credits per question type
+- the definition and unit of Sectors' `cost_to_income_ratio`, and a sample of values
+  cross-checked against the Sectors app
+- every Sectors endpoint through the deployed product (sector-wide discovery, NPL via
+  the screener, ambiguous names, unknown tickers); other sectors by name
+- failure cases still to test live: Groq rate limit, Redis unavailable, timeouts;
+  latency and credits per question type
 - security checks: prompt injection against the live LLM, `pip-audit`, GitHub secret
-  scanning and push protection, runtime log review, independent re-test of the deployed
-  protections and a fresh build of the current frontend source
+  scanning and push protection, runtime log review
+- a credit reserve for the judging period
 - final runtime LLM provider and model (Groq `openai/gpt-oss-120b` runs in production)
 
 ---
@@ -463,5 +465,5 @@ The project must:
 Phase 5 is implemented: the product is deployed on Vercel with the deployment
 protections and UI listed under Phase 5 (see Phase 5 → Progress). Phase 6 started on
 2026-10-02 by team decision (first run in docs/e2e-validation.md) and includes local
-security regressions as of 2026-10-05. Live retests and a fresh frontend deployment
-are still open. Phase 7 is planned.
+security regressions as of 2026-10-05. Live security retests are still open.
+Phase 7 is planned.

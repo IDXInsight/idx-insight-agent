@@ -263,7 +263,7 @@ button.brand { border:0; background:none; text-align:left; }
 @media(max-width:480px) { .hero-actions { flex-wrap:wrap; }.hero-visual { min-height:310px; }.visual-orbit { height:270px; }.visual-core { width:125px; height:125px; }.visual-core span { font-size:12px; }.visual-chip { font-size:10px; }.glossary-grid { grid-template-columns:1fr; }.glossary-card { min-height:0; }.panel-title { flex-wrap:wrap; }.metric-picker { margin-left:0; }.peer-values { grid-template-columns:1fr; } }
 
 /* Landing-page research journey, inspired by the supplied horizontal timeline. */
-.journey-section { position:relative; height:100vh; border-top:1px solid #2a362d; border-bottom:1px solid #2a362d; }
+.journey-section { position:relative; height:calc(100vh - var(--site-header-h)); border-top:1px solid #2a362d; border-bottom:1px solid #2a362d; }
 .journey-sticky { position:relative; display:flex; flex-direction:column; justify-content:center; height:100%; overflow:hidden; }
 .journey-heading { display:flex; align-items:end; justify-content:space-between; gap:32px; padding:0 8px 30px; }
 .journey-heading h2 { margin-top:17px; font-size:clamp(34px,3.8vw,58px); line-height:1.08; letter-spacing:-2.1px; font-weight:480; }
@@ -436,3 +436,33 @@ button.brand { border:0; background:none; text-align:left; }
 }
 @media(max-width:380px) { .widget-context .widget-reorder-group { grid-template-columns:1fr; }.widget-context .widget-slot[data-widget-id$="source"] { grid-column:auto; } }
 @media(prefers-reduced-motion:reduce) { .widget-slot { scroll-behavior:auto; } }
+
+/* Sticky landing header with section links; sections stop below it when scrolled to. */
+.site-page { --site-header-h:80px; }
+.site-header-bar { position:sticky; top:0; z-index:60; background:#111413d9; backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-bottom:1px solid #29332c; }
+.site-header-bar .site-header { border-bottom:0; }
+.site-header nav>a { position:relative; padding:6px 0; transition:color .15s; }
+.site-header nav>a.active { color:#d9f1df; }
+.site-header nav>a.active::after { content:""; position:absolute; left:0; right:0; bottom:-2px; height:2px; border-radius:2px; background:#9edab5; }
+.site-header .lang-toggle button { font-size:11px; padding:6px 9px; }
+.landing-main [id], .site-page section[id] { scroll-margin-top:calc(var(--site-header-h) + 8px); }
+@media(max-width:760px) { .site-page { --site-header-h:68px; } }
+
+/* One overlay system: a right-hand drawer for reading a result's details, a centred dialog for
+   the watchlist form. Same header, close button, backdrop and entrance timing. */
+.overlay { animation:overlay-in .18s ease-out; }
+.drawer { animation:drawer-in .22s ease-out; }
+.drawer.small-dialog { animation:dialog-in .2s ease-out; width:min(480px,calc(100% - 28px)); }
+@keyframes overlay-in { from { opacity:0; } to { opacity:1; } }
+@keyframes drawer-in { from { transform:translateX(24px); opacity:0; } to { transform:none; opacity:1; } }
+@keyframes dialog-in { from { transform:translateY(10px) scale(.98); opacity:0; } to { transform:none; opacity:1; } }
+
+/* Non-research answers (about, advice, out of scope, clarify), shown under the research box. */
+.scope-reply { padding:18px 22px 16px; border-color:#3c4a40; }
+.scope-reply.advice { border-color:#5a4f33; }
+.scope-reply-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.scope-reply-head .eyebrow { display:flex; align-items:center; gap:6px; }
+.scope-reply.advice .scope-reply-head .eyebrow { color:#e3c98f; }
+.scope-reply>p { margin:12px 0 14px; font-size:13px; line-height:1.8; color:#d3dfd7; max-width:760px; }
+.scope-reply .suggestions { margin:0; }
+.scope-reply .suggestions button.agent-suggestion { border-color:#4d6955; color:#cfe8d6; background:#1f2b23; }

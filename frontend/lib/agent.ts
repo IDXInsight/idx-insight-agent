@@ -70,6 +70,8 @@ export type AgentResponse = {
     narrative: { text: string; citations: string[] }[] | null;
     synthesis_mode: "template" | "llm";
     clarification_question: string | null;
+    /** Research questions the agent suggests with a clarification or a scope answer. */
+    suggestions?: string[];
   };
   scope: {
     intent: string | null;
