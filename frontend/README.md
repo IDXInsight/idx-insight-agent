@@ -1,8 +1,11 @@
 # IDX Insight — frontend
 
-Next.js (App Router) research workspace for the IDX Insight Agent: research box,
+Next.js (App Router) landing page and research workspace for the IDX Insight Agent: research box,
 disclosure radar, peer comparison with small-multiple charts, findings, evidence
 explorer, agent trace and a research history. Deployment target: Vercel.
+
+The landing page at `/` explains the agent and banking terms (ROE, ROA, NIM, BOPO,
+cost-to-income, and others). The workspace is at `/research`.
 
 ## What the UI shows
 
@@ -23,8 +26,14 @@ synthetic data.
   sent only when the question names no ticker or sector, because the backend researches
   every watchlist ticker (`lib/research.ts`). Clicking a ticker prepares a company
   question without running it.
-- **Research history**: every result is kept in the browser (latest 12, one per
-  question and language) and reopened without a new API call. The sidebar views
+- **Reorderable widgets**: use the grip above a card to move it within its column.
+  On touch, drag the grip; with a keyboard, focus it and press Alt + Up/Down.
+  The order is saved in this browser separately for Overview, Disclosure, Peer lens,
+  and Company context; Reset layout restores the default order. Charts and tables
+  keep their natural height.
+- **Research history**: every result is kept in IndexedDB in this browser, including
+  repeated questions, and reopened without a new API call. Older localStorage results
+  are migrated on first visit. The sidebar views
   (Disclosure, Peer lens, Company context) open the latest result of that type.
 - **Language**: ID/EN toggle. The question is sent with that language, so the briefing
   and the interface match; a saved result keeps the language it was asked in.
@@ -32,8 +41,13 @@ synthetic data.
   reports as usually favourable, with the peer median as a dashed line. Each company
   keeps one colour across the watchlist, charts and tables (`lib/palette.ts`, validated
   for contrast and colour-blind separation on the dark surface).
-- **Company marks**: Sectors provides no company logos, so a company is shown as its
-  ticker in its chart colour (`components/ticker-mark.tsx`).
+- **Evidence trend chart**: a line chart for one bank and metric, shown only when the
+  response includes at least two numeric, sourced reporting periods from successful
+  tool calls. A dashed reference line shows the peer median for the latest matching
+  period. Its evidence drawer lists every plotted point; missing history stays explicit.
+- **Company marks**: BBCA, BBRI, BMRI, and BBNI use local bank logos; other IDX
+  tickers keep their colour-coded mark (`components/ticker-mark.tsx`). See logo
+  attribution below.
 - Progress while the agent runs (elapsed seconds), and every proxy error, including the
   Vercel Firewall's own 429 body, is explained in the chosen language.
 
@@ -56,9 +70,10 @@ Checks: `npm run typecheck`, `npm run lint`, `npm run build`, `npm test` (after 
 - The browser never calls the backend directly. `app/api/agent/status` and
   `app/api/agent/query` are server-side route handlers that validate input (question,
   tickers, `language` = `id` or `en`) and forward to FastAPI, so the backend URL stays
-  server-side and no CORS setup is needed.
-- The proxy sends the shared secret (`X-Internal-Key`) and the visitor's IP
-  (`X-Client-IP`, read from the headers Vercel sets itself) so the backend can reject
+  server-side and no CORS setup is needed. The paid query endpoint rejects cross-origin
+  browser requests and caps JSON bodies at 8 KiB, including chunked requests.
+- The proxy sends the shared secret (`X-Internal-Key`) and, only on Vercel, the visitor's IP
+  (`X-Client-IP`, read from platform-controlled headers) so the backend can reject
   direct calls and limit runs per visitor (`lib/proxy.ts`).
 - `next.config.ts` sets security headers on every page: a same-origin Content Security
   Policy, `X-Frame-Options: DENY`, `nosniff`, a strict referrer policy and a
@@ -96,11 +111,14 @@ Done:
 - Deployed at https://idx-insight.vercel.app (Production uses the real backend)
 
 Not yet done:
-- The response has no multi-period series, so there is no historical (trend) chart
+- The backend has no dedicated multi-period series endpoint; the trend is limited to
+  historical ratio evidence already returned in a research response
 - History is per browser; there are no accounts and nothing is shared between devices
-- `app/page.tsx` still holds most of the workspace in one file
+- `app/research/page.tsx` still holds most of the workspace in one file
 - Any external resource (fonts, images, scripts from another domain) needs a matching
   change to the Content Security Policy in `next.config.ts`
+
+The four bank logos come from [BCA Brand Assets](https://www.bca.co.id/id/tentang-bca/media-riset/pressroom/brand-assets), [BRI 2025](https://commons.wikimedia.org/wiki/File:BRI_2025.svg), [Bank Mandiri Brand Guideline](https://www.bankmandiri.co.id/brandguideline), and [BNI](https://commons.wikimedia.org/wiki/File:Bank_Negara_Indonesia_logo_(2004).svg). Their trademarks remain with their owners.
 
 ## Preview deployments
 

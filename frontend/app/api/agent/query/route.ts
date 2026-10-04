@@ -1,5 +1,5 @@
 import { backendFetch, backendUrl } from "@/lib/backend";
-import { type ProxyError, clientIp, errorForBackend, proxyStatus } from "@/lib/proxy";
+import { BodyTooLargeError, type ProxyError, clientIp, errorForBackend, limitedJsonBody, proxyStatus, sameOriginRequest } from "@/lib/proxy";
 
 export const dynamic = "force-dynamic";
 // One agent run makes several Sectors calls and optional LLM calls.
@@ -8,19 +8,27 @@ export const maxDuration = 120;
 const TICKER = /^[A-Z]{4}$/;
 
 function fail(error: ProxyError): Response {
-  return Response.json({ error }, { status: proxyStatus[error] });
+  return Response.json({ error }, { status: proxyStatus[error], headers: { "Cache-Control": "no-store" } });
 }
 
 /** Forwards a research question to `POST /v1/agent/query` after validating it. */
 export async function POST(request: Request): Promise<Response> {
+  if (!sameOriginRequest(request)) return fail("invalid_request");
+  if (request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
+    return fail("invalid_request");
+  }
   if (!backendUrl()) return fail("not_configured");
 
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = await limitedJsonBody(request);
+  } catch (error) {
+    if (error instanceof BodyTooLargeError) {
+      return Response.json({ error: "invalid_request" }, { status: 413, headers: { "Cache-Control": "no-store" } });
+    }
     return fail("invalid_request");
   }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return fail("invalid_request");
   const { query, watchlist, language } = (body ?? {}) as { query?: unknown; watchlist?: unknown; language?: unknown };
   if (typeof query !== "string" || query.trim().length < 3 || query.length > 500) {
     return fail("invalid_request");
@@ -34,7 +42,7 @@ export async function POST(request: Request): Promise<Response> {
   const timeoutMs = Number(process.env.AGENT_TIMEOUT_MS) || 110_000;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   // The backend limits agent runs per visitor; it trusts this header only with the shared secret.
-  const ip = clientIp(request.headers);
+  const ip = clientIp(request.headers, process.env.VERCEL === "1");
   if (ip) headers["X-Client-IP"] = ip;
   try {
     const response = await backendFetch("/v1/agent/query", {
@@ -44,7 +52,7 @@ export async function POST(request: Request): Promise<Response> {
       body: JSON.stringify({ query: query.trim(), watchlist: tickers, language: language ?? "id" }),
     }, timeoutMs);
     if (!response.ok) return fail(errorForBackend(response.status, await response.json().catch(() => null)));
-    return Response.json(await response.json());
+    return Response.json(await response.json(), { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof DOMException && error.name === "TimeoutError") return fail("timeout");
     return fail("backend_unavailable");

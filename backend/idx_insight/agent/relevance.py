@@ -124,8 +124,10 @@ def _llm_additions(state: AgentState, llm: AgentLLM,
     )
 
     def line(ev: Event) -> str:
+        # Source-provided titles can contain arbitrary text. Event type, date,
+        # symbol and deterministic score are enough for this bounded decision.
         return (f"{ev.event_id} | {ev.event_date} | {ev.symbol} | {ev.event_type} | "
-                f"{ev.title} | score {ev.relevance_score}")
+                f"score {ev.relevance_score}")
 
     by_id = {ev.event_id: ev for ev in state.relevant_events}
     calls = llm.call_tools(

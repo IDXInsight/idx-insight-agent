@@ -86,7 +86,13 @@ def validate_narrative(proposal: NarrativeProposal,
             return None, f"sentence {i}: {issue}"
         if token := ungrounded_number(text, " ".join(items[c] for c in citations)):
             return None, f"sentence {i}: number {token} not in cited items"
-        out.append(CitedSentence(text=text, citations=citations))
+        # The model may select and order validated facts, but its prose is not
+        # trusted as a fact. Render the cited source text verbatim so prompt
+        # injection cannot add an unsupported instruction or assertion.
+        grounded_text = " ".join(items[c] for c in citations)
+        if len(grounded_text) > MAX_SENTENCE_CHARS:
+            return None, f"sentence {i}: cited source text too long"
+        out.append(CitedSentence(text=grounded_text, citations=citations))
     return out, None
 
 
@@ -153,8 +159,7 @@ def _citable_items(state: AgentState, gaps: list[str]) -> dict[str, str]:
     items: dict[str, str] = {}
     for c in state.claims:
         if c.claim_id in accepted:
-            why = "; ".join(c.meta.get("reasons", []))
-            items[c.claim_id] = f"{c.statement} | {why}" if why else c.statement
+            items[c.claim_id] = c.statement
     for i, gap in enumerate(gaps, 1):
         items[f"gap-{i}"] = gap
     return items

@@ -8,18 +8,19 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 
 ## Current Status
 
-**Phases 0–5 implemented: the agent runs on real Sectors data behind a deployed
-workspace** (mock data remains for tests and offline development); Phase 6 (end-to-end
-validation) is in progress. See [PHASE.md](PHASE.md) — the project is currently until
-Phase 6.
+**Phases 0–5 implemented; Phase 6 (end-to-end validation) is in progress.** The
+deployed workspace uses real Sectors data; mock data remains for tests, local
+development and Preview deployments. See [PHASE.md](PHASE.md).
 
-**Live:** https://idx-insight.vercel.app (real Sectors data, Groq `openai/gpt-oss-120b`).
-Every new question spends Sectors credits; repeated questions are answered from a cache.
+**Live deployed build:** https://idx-insight.vercel.app (real Sectors data, Groq
+`openai/gpt-oss-120b`). Every new question spends Sectors credits; repeated questions
+are answered from a cache. Uncommitted workspace edits described below are not yet
+verified on that deployment.
 
-Overall: the product works end to end on real data and is deployed; the UI still has
-gaps, and end-to-end validation, security testing and the submission materials have
-not started. Sectors credits used so far: about 152 of 1,000 (49 during Phase 4, 9 on
-the deployment, about 94 in three end-to-end runs).
+Overall: the product works end to end on real data and is deployed. UI refinement,
+end-to-end validation and security testing are in progress; submission materials
+have not started. As recorded on 2026-10-02, about 152 of 1,000 Sectors credits had
+been used (49 during Phase 4, 9 on the deployment, about 94 in three end-to-end runs).
 
 | Area | State | Details |
 |---|---|---|
@@ -29,10 +30,10 @@ the deployment, about 94 in three end-to-end runs).
 | Sectors data | Done | Real v2 REST adapter for the 8 endpoints the agent needs, with credit guardrails; verified live on 2026-09-27 (real-data evaluation 8/8). Fictional mock data for tests |
 | Runtime LLM | Partial | Groq `openai/gpt-oss-120b` verified on every LLM path and used in production; Gemini verified for synthesis only. **Final provider not formally decided** |
 | Languages | Done | Indonesian and English; the UI has an ID/EN toggle and asks the agent for the chosen language |
-| Frontend (Next.js) | Done | Workspace connected to the agent: free-ticker watchlist, research history, research-type detection, ID/EN toggle, small-multiple peer chart, evidence explorer, agent trace, offline message; no illustrative data (see [frontend/README.md](frontend/README.md)) |
+| Frontend (Next.js) | Implemented; refinement ongoing | Landing page and banking glossary; watchlist; full per-browser history; ID/EN; peer bar charts and evidence-backed trend line; reorderable widgets; evidence explorer and agent trace (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
-| Security testing | Not started | Prompt-injection tests against the live LLM, Python dependency audit, GitHub secret scanning and push protection, runtime log review |
+| Security testing | In progress | Local prompt-injection, proxy, auth and quota regression tests pass; live LLM/deployment retest, Python dependency audit, GitHub secret scanning and runtime log review remain. Latest source is not yet rebuilt/deployed |
 | End-to-end validation (Phase 6) | In progress | Three runs on 2026-10-02: 11 questions (local and deployed), real-data evaluation 6/8 live, 8/8 after making the discovery expectation depend on eligible events; failure cases; parser, unit, credit-cap, crash and firewall-message fixes; see [docs/e2e-validation.md](docs/e2e-validation.md) |
 | Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
@@ -45,7 +46,7 @@ the deployment, about 94 in three end-to-end runs).
 | Analytics & validation | Deterministic Python code (no LLM arithmetic) | Implemented |
 | Data source | Sectors v2 REST API (`https://api.sectors.app/v2/`) through `SectorsService` → `SectorsAdapter` | Implemented (real + mock adapter) |
 | Runtime LLM | Provider-agnostic `LLMProvider` interface; Groq and Gemini providers over their REST APIs | Optional; see below |
-| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Recharts, lucide-react | In progress (`frontend/`) |
+| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Recharts, lucide-react | Implemented; refinement ongoing (`frontend/`) |
 | Tests | pytest + ruff (backend); `node:test`, ESLint, `tsc` (frontend) | Implemented |
 | Deployment | Vercel: two projects from this repository (frontend, and the FastAPI backend as one Python function); Upstash Redis for shared state | Deployed (Hobby plan, region `iad1`) |
 
@@ -69,9 +70,9 @@ backend's `.env`.
 ### One-time setup
 
 ```bash
-# from the repository root
-python -m venv .venv
-.venv/Scripts/pip install -e "backend[dev]"      # macOS/Linux: .venv/bin/pip
+# from the repository root (macOS/Linux)
+python3 -m venv .venv
+.venv/bin/python -m pip install -e "backend[dev]"
 cp .env.example .env                            # backend settings (git-ignored)
 
 cd frontend
@@ -81,6 +82,9 @@ cp .env.example .env.local                      # IDX_INSIGHT_API_URL=http://127
 
 The backend reads `.env` in the repository root. Variables set in the shell
 override it, which is the easiest way to switch modes for one run.
+If `IDX_INSIGHT_API_SECRET` is set locally, use the same value in the root `.env`
+and `frontend/.env.local`; both may be empty for localhost development, but the
+deployed backend requires a secret.
 
 ### The two modes at a glance
 
@@ -103,21 +107,32 @@ testing the LLM paths.
 ```bash
 # terminal 1: backend
 cd backend
-SECTORS_DATA_MODE=mock LLM_PROVIDER=none ../.venv/Scripts/python -m uvicorn idx_insight.api.app:app --reload --port 8000
+SECTORS_DATA_MODE=mock LLM_PROVIDER=none ../.venv/bin/python -m uvicorn idx_insight.api.app:app --reload --port 8000
 
 # terminal 2: frontend
 cd frontend
 npm run dev                                     # open http://localhost:3000
 ```
 
-PowerShell: set the variables first with
-`$env:SECTORS_DATA_MODE="mock"; $env:LLM_PROVIDER="none"`, then run uvicorn.
+PowerShell: use `.venv\Scripts\python` and set the variables first with
+`$env:SECTORS_DATA_MODE="mock"; $env:LLM_PROVIDER="none"`.
 
 Useful mock questions: "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi
 profitabilitas dan efisiensi" or "Disclosure apa yang perlu saya pantau minggu
 depan untuk bank dalam watchlist?". The fixtures include deliberate edge cases
 (conflicting BMRI growth, BBNI ratios in percent, missing data) so the UI shows
 data gaps and warnings.
+
+For a local production preview, run `npm run build` and then
+`npm run start -- --hostname 127.0.0.1 --port 3000` from `frontend/`.
+`npm run start` alone serves the **last successful build**, which may be older
+than the source files. On 2026-10-05, that last build served `/` and `/research`
+with HTTP 200, reported a
+connected mock/rules-only backend, and answered a sample peer question with HTTP
+200 without credits or LLM calls. It predates the latest proxy security edits;
+the check confirms the UI and connection, not the current security code. Next.js
+dev mode on that machine opened the port but did not answer page requests, so a
+fresh build is still needed before verifying the latest source in a browser.
 
 ### Real data mode (spends credits)
 
@@ -134,7 +149,7 @@ Before you start:
 # terminal 1: backend (keys come from .env)
 cd backend
 SECTORS_DATA_MODE=real LLM_PROVIDER=groq LLM_MODEL=openai/gpt-oss-120b \
-  ../.venv/Scripts/python -m uvicorn idx_insight.api.app:app --reload --port 8000
+  ../.venv/bin/python -m uvicorn idx_insight.api.app:app --reload --port 8000
 
 # terminal 2: frontend
 cd frontend
@@ -286,10 +301,10 @@ The agent makes explicit, recorded decisions at each step:
    unavailable and malformed data separately.
 8. **Synthesise** a briefing from accepted claims only: each finding states
    what happened and, for events, why it matters. An optional LLM narrative
-   must cite accepted claim ids or data-gap ids in every sentence; code rejects
-   the whole narrative if a sentence cites an unknown item, uses a number that
-   is not in the items it cites, or contains advice or speculative language
-   (for example "menandakan", "signals", "will rise").
+   selects and orders accepted claim or data-gap ids; the public text is rendered
+   from those validated items, never from model-written prose. Code rejects the
+   whole narrative if a sentence cites an unknown item, uses a number that
+   is not in the items it cites, or contains advice or speculative language.
 
 Bounded recovery happens where the problem appears: at most one retry per
 Sectors call, one widened filing window when results are empty, a prior-year
@@ -533,22 +548,26 @@ variables already set in the real environment always take precedence.
 ## Testing
 
 ```bash
-python -m venv .venv
-.venv/Scripts/pip install -e "backend[dev]"     # macOS/Linux: .venv/bin/pip
+python3 -m venv .venv
+.venv/bin/python -m pip install -e "backend[dev]"  # macOS/Linux
 cd backend
-../.venv/Scripts/python -m pytest -q
-../.venv/Scripts/ruff check idx_insight tests evals
+../.venv/bin/python -m pytest -q
+../.venv/bin/ruff check idx_insight tests evals
 ```
 
-293 deterministic tests cover agent decisions (resolution, planning, discovery,
+Windows uses `.venv\Scripts\python` and `.venv\Scripts\ruff` instead.
+The latest local run (2026-10-05) passed **302 backend tests** and
+**24 frontend tests** (`cd frontend && npm test`). Ruff passed for the changed backend files.
+The backend tests cover agent decisions (resolution, planning, discovery,
 relevance, second-hop with and without an LLM, recovery), analytics, evidence
 validation and sufficiency, the Sectors service and mock adapter, the LLM layer
 (Gemini/Groq request and response normalisation through a fake HTTP transport,
 structured output, tool calls, error normalisation, configuration), dependency
 direction, bilingual output, the evaluation cases, the API contract and the deployment
 protections (shared store, Redis REST format, shared credit ledger, internal key, usage
-limits, answer cache). No test
-needs an API key or network access; tests never read a local `.env`.
+limits, answer cache), and adversarial prompt-injection cases. No test needs an API
+key or network access; tests never read a local `.env`. An offline `npm audit`
+reported zero advisories; a live dependency audit is still pending.
 
 ### Evaluation
 
@@ -561,9 +580,9 @@ behind every accepted claim.
 
 ```bash
 cd backend
-../.venv/Scripts/python -m evals.run_eval                                  # mock, rules-only
-../.venv/Scripts/python -m evals.run_eval --live --pause 25                # mock + LLM from .env
-SECTORS_DATA_MODE=real ../.venv/Scripts/python -m evals.run_eval --cases real --live --pause 25
+../.venv/bin/python -m evals.run_eval                                      # mock, rules-only
+../.venv/bin/python -m evals.run_eval --live --pause 25                    # mock + LLM from .env
+SECTORS_DATA_MODE=real ../.venv/bin/python -m evals.run_eval --cases real --live --pause 25
 ```
 
 The harness prints the Sectors credits each run used. Latest runs (2026-09-27,
@@ -610,13 +629,16 @@ To run the API and the UI, see
 
 ## Remaining Work
 
-Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase 6.
+Phases are defined in [PHASE.md](PHASE.md); the project is currently in Phase 6.
 
 **Product UI (Phase 5)**
-- Done: free-ticker watchlist, research history, research-type detection, ID/EN toggle,
-  progress feedback, firewall 429 message, small-multiple chart, offline state, mobile layout
-- Smaller components in `frontend/app/page.tsx`
-- A trend chart needs multi-period series in the API response
+- Done in the workspace: landing page and glossary, free-ticker watchlist, full
+  IndexedDB research history, research-type detection, ID/EN toggle, progress and
+  error states, peer bar charts, evidence-backed trend line, bank logos, draggable
+  widgets, offline state and mobile layout.
+- Split larger page/workspace components for easier maintenance.
+- A dedicated multi-period API series would let the trend chart cover more than
+  the historical ratio evidence already present in one research response.
 
 **End-to-end validation (Phase 6, in progress)**
 - Done: a local and a deployed real-data run, 10 questions including non-bank and
@@ -632,14 +654,24 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently until Phase
 - Latency and credits per question type
 - Final runtime LLM provider and model
 
-**Security checks (Phase 6, not started)**
-- Prompt injection and advice requests against the live LLM (system-prompt extraction,
+**Security checks (Phase 6, in progress)**
+- Local regression tests cover fabricated cited narrative, prompt section injection,
+  forged proxy IP, cross-origin requests, oversized JSON, mandatory agent steps and
+  invalid source links; auth and quota tests pass. A tracked-file key-pattern scan
+  found no matches; it did not scan Git history.
+- The LLM now selects cited items without publishing its own prose, and source-provided
+  event titles do not enter the second-hop decision prompt. Rebuild and retest the
+  latest source before treating those protections as deployed.
+- Still to test prompt injection and advice requests against the live LLM (system-prompt extraction,
   instructions to ignore rules, fabricated claims, HTML or script in questions)
 - Independent re-test of the deployment protections (missing or wrong key, spoofed
   client IP, per-client and firewall limits, keys or backend URL in the browser)
-- `pip-audit` for the backend dependencies (`npm audit` for the frontend: 0 vulnerabilities)
+- `pip-audit` for backend dependencies and a live frontend dependency audit
+  (`npm audit --offline` reported 0 advisories)
 - GitHub secret scanning and push protection on the public repository
 - Review of the Vercel runtime logs for secrets
+- Complete frontend typecheck/lint and a current-source browser run; those commands
+  stalled locally while loading dependencies, though the unit suites passed.
 
 **Demo and submission (Phase 7, not started)**
 - One-sentence problem statement; one-minute teaser; judging video of up to three

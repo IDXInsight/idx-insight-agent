@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**Currently until Phase 6**
+**Current phase: 6 — End-to-End Validation (in progress as of 2026-10-05).**
 
 This document describes the complete project roadmap.
 Future phases are documented for planning and team coordination.
@@ -243,7 +243,7 @@ Phase 2 API contract (Phase 4 for real data).
 A user can run discovery and peer-analysis queries end-to-end in the
 Next.js UI and inspect evidence and the execution trace.
 
-### Progress (2026-10-02)
+### Progress (updated 2026-10-05)
 - Deployed on Vercel from `main`: https://idx-insight.vercel.app (frontend) and
   `idx-insight-api` (FastAPI backend), real Sectors data and Groq in Production,
   mock data and no LLM in Preview
@@ -253,10 +253,13 @@ Next.js UI and inspect evidence and the execution trace.
 - Vercel Firewall: the backend denies requests without the internal key at the edge;
   the frontend rate-limits `/api/agent/query` to 10 requests per minute per IP
 - Verified on the deployment with two real-data questions (9 credits)
-- UI follow-ups done on 2026-10-02: free-ticker watchlist, research history,
-  research-type detection, Indonesian/English toggle, progress feedback, the firewall's
-  429 message, small-multiple peer chart, offline state instead of illustrative data,
-  mobile layout. Still open: smaller components in `frontend/app/page.tsx`
+- UI follow-ups: landing page with project explanation and banking glossary;
+  free-ticker watchlist, full per-browser research history in IndexedDB, research-type
+  detection, Indonesian/English toggle, progress and error states, bank logos, peer bar
+  charts and an evidence-backed trend line when multiple periods exist. Overview,
+  Disclosure, Peer lens and Company context widgets can be reordered and reset.
+- The deployed `main` build is separate from the current uncommitted workspace;
+  current-source changes still need a fresh build and deployment verification.
 
 ---
 
@@ -291,9 +294,22 @@ User
 ### Dependencies
 Phases 4 and 5.
 
-### Status (2026-10-02)
-Not started. Done so far as part of Phase 5: two real-data smoke-test questions on the
-deployment and checks of the deployment protections. Open:
+### Status (updated 2026-10-05)
+In progress. Three real-data end-to-end runs were recorded on 2026-10-02 (see
+`docs/e2e-validation.md`); the earlier deployment smoke test covered two questions.
+Local regression testing now covers prompt injection, fabricated cited prose,
+mandatory research steps, cross-origin requests, forged proxy IPs, oversized JSON,
+internal-key authentication and usage limits. The latest local run passed 302 backend
+and 24 frontend tests; Ruff passed on the changed backend files, and an offline npm
+audit reported no advisories.
+A scan of tracked files found no key-pattern matches, but Git history and GitHub
+secret scanning have not been checked.
+
+On 2026-10-05 a previously built local frontend returned HTTP 200 for `/` and
+`/research`, connected to a mock/rules-only backend, and answered a sample peer
+question without Sectors or LLM usage. That build predates the latest proxy security
+edits; this is a visual/connectivity check, not verification of the current source.
+Open:
 - re-run of the 8 real-data evaluation cases; every Sectors endpoint through the
   deployed product (sector-wide discovery, NPL via the screener, ambiguous names,
   unknown tickers); a sample of values cross-checked against the Sectors app
@@ -301,7 +317,8 @@ deployment and checks of the deployment protections. Open:
 - failure cases (Groq rate limit, credit cap, Redis unavailable, timeouts), latency and
   credits per question type
 - security checks: prompt injection against the live LLM, `pip-audit`, GitHub secret
-  scanning and push protection, runtime log review, independent re-test of the protections
+  scanning and push protection, runtime log review, independent re-test of the deployed
+  protections and a fresh build of the current frontend source
 - final runtime LLM provider and model (Groq `openai/gpt-oss-120b` runs in production)
 
 ---
@@ -358,7 +375,7 @@ Assistants track page, read on 2026-09-27. The official pages remain authoritati
 | Registering extra accounts to get more credits for the same project is grounds for **disqualification** | Only use credits obtained legitimately |
 | Sectors must be a **core** data source, not a decorative call; the product must be real, functional and **not faked for the demo** | Phase 4 is mandatory; no mock data in the demo or videos |
 | **Data source is restricted to the Sectors API**; AI/LLM APIs may be used in every track (Sectors team on Slack, 16 Sep 2026) | No other market-data sources (no scraping of IDX, Yahoo Finance or news sites). Links in Sectors fields such as a filing's `source` may be shown, but the linked documents are not fetched or parsed. Groq and Gemini are allowed |
-| Fictional mock data is used only for automated tests and local development | Mock data mirrors the *shape* of Sectors responses with fictional values; it is never copied from real responses and never used in the demo, videos or deployment |
+| Fictional mock data is used only for automated tests, local development and Preview deployments | Mock data mirrors the *shape* of Sectors responses with fictional values; it is never copied from real responses and never used in the demo, videos or Production deployment |
 | AI Agents track: custom agent logic or orchestration and an AI/LLM component are **mandatory**; an off-the-shelf client connected to Sectors MCP with prompts alone does not qualify | Demo with the LLM enabled |
 | Working prototype with an end-to-end core workflow; live deployment is **not required** | We deploy anyway (team decision), with the protections listed in Phase 5 |
 | No financial advice; position as an information and analysis tool with a disclaimer where relevant; no automated trade execution | Already enforced by the agent's boundary note and guards |
@@ -441,8 +458,10 @@ The project must:
 
 ## Current Boundary
 
-**Currently until Phase 6.**
+**Currently in Phase 6.**
 
 Phase 5 is implemented: the product is deployed on Vercel with the deployment
 protections and UI listed under Phase 5 (see Phase 5 → Progress). Phase 6 started on
-2026-10-02 by team decision (first run in docs/e2e-validation.md). Phase 7 is planned.
+2026-10-02 by team decision (first run in docs/e2e-validation.md) and includes local
+security regressions as of 2026-10-05. Live retests and a fresh frontend deployment
+are still open. Phase 7 is planned.

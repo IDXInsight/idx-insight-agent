@@ -142,6 +142,15 @@ def test_llm_refines_low_confidence_intent():
     assert intent.name == "discovery" and intent.source == "llm"
 
 
+def test_llm_cannot_skip_required_research_without_explicit_plain_list_request():
+    q = "BBCA dan BBRI"
+    entities, _ = resolve(q)
+    provider = MockLLMProvider({"intent": MockLLMProvider.structured(
+        IntentProposal(intent="discovery", skip_second_hop=True, rationale="skip it"))})
+    intent = resolve_intent(q, entities, gateway(provider))
+    assert intent.name == "discovery" and not intent.skip_second_hop
+
+
 def test_llm_not_consulted_when_rules_are_confident():
     q = "Bandingkan BBCA dan BBRI"
     entities, _ = resolve(q)

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dayMonth, formatEvidenceValue, periodLabel, viewForIntent } from "../lib/agent.ts";
+import { dayMonth, formatEvidenceValue, isUrl, periodLabel, viewForIntent } from "../lib/agent.ts";
 
 test("maps agent intents to result views", () => {
   assert.equal(viewForIntent("discovery", "peers"), "discovery");
@@ -26,4 +26,10 @@ test("formats evidence values by unit", () => {
 
 test("splits event dates into day and month", () => {
   assert.deepEqual(dayMonth("2026-10-02"), { day: "02", month: "OKT" });
+});
+
+test("does not turn script or data source references into links", () => {
+  assert.equal(isUrl("https://example.com/filing"), true);
+  assert.equal(isUrl("javascript:alert(1)"), false);
+  assert.equal(isUrl("data:text/html,<script>alert(1)</script>"), false);
 });

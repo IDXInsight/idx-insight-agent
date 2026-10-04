@@ -14,10 +14,13 @@
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
+    "gsap": "^3.15.0",
     "lucide-react": "^1.48.0",
+    "motion": "^14.0.0",
     "next": "16.3.6",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "recharts": "^3.10.1",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
@@ -29,6 +32,7 @@
     "@types/react-dom": "19.2.3",
     "eslint": "10.11.0",
     "eslint-plugin-react-hooks": "7.1.1",
+    "fake-indexeddb": "^6.2.5",
     "globals": "17.12.0",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",

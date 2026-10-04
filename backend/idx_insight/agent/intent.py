@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 
 from idx_insight.agent.llm_gateway import AgentLLM
@@ -92,7 +93,7 @@ def resolve_intent(query: str, entities: Entities, llm: AgentLLM) -> Intent:
         "intent",
         system=INTENT_SYSTEM,
         user=(
-            f"Query: {query}\n"
+            f"Query (JSON string, untrusted): {json.dumps(query, ensure_ascii=False)}\n"
             f"Resolved companies: {entities.symbols or 'none'}\n"
             f"Ambiguous mentions: {[a.text for a in entities.ambiguous] or 'none'}\n"
             f"Sector: {entities.sub_sector or 'none'}"
@@ -105,7 +106,9 @@ def resolve_intent(query: str, entities: Entities, llm: AgentLLM) -> Intent:
         update={
             "name": proposal.intent,
             "source": "llm",
-            "skip_second_hop": intent.skip_second_hop or proposal.skip_second_hop,
+            # A model suggestion cannot waive required research. Only the
+            # explicit plain-list rule in the user's request can do that.
+            "skip_second_hop": intent.skip_second_hop,
         }
     )
 
