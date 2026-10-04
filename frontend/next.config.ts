@@ -29,6 +29,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // The repository root holds the Python backend; keep Next.js scoped to this folder.
   turbopack: { root: process.cwd() },
+  experimental: {
+    // Next 16.3 keeps a Turbopack build cache in .next/cache, which Vercel restores between
+    // deployments. On 2026-10-05 it served a stale globals.css to production (every rule
+    // added since the cache was written was missing). Build from scratch every time.
+    turbopackFileSystemCacheForBuild: false,
+  },
   poweredByHeader: false,
   // One landing page with sections; the short URL points at its glossary section.
   async redirects() {
