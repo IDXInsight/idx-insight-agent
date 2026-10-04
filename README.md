@@ -13,13 +13,15 @@ deployed workspace uses real Sectors data; mock data remains for tests, local
 development and Preview deployments. See [PHASE.md](PHASE.md).
 
 **Live deployed build:** https://idx-insight.vercel.app (real Sectors data, Groq
-`openai/gpt-oss-120b`). Every new question spends Sectors credits; repeated questions
-are answered from a cache.
+`openai/gpt-oss-120b`). A new research question spends Sectors credits. Repeated
+questions are answered from a cache, and replies to non-research messages (e.g. "who are
+you?") make no Sectors call; see [Data Freshness and Caching](#data-freshness-and-caching).
 
 Overall: the product works end to end on real data and is deployed. UI refinement,
 end-to-end validation and security testing are in progress; submission materials
-have not started. As recorded on 2026-10-02, about 152 of 1,000 Sectors credits had
-been used (49 during Phase 4, 9 on the deployment, about 94 in three end-to-end runs).
+have not started. About 152 of 1,000 Sectors credits have been used (49 during
+Phase 4, 9 on the deployment, about 94 in three end-to-end runs on 2026-10-02); the
+2026-10-05 work used mock data and spent none.
 
 | Area | State | Details |
 |---|---|---|
@@ -27,7 +29,7 @@ been used (49 during Phase 4, 9 on the deployment, about 94 in three end-to-end 
 | Deterministic analytics, evidence validation, sufficiency assessment | Done | No LLM arithmetic; unsupported claims are rejected and reported as data gaps |
 | FastAPI backend | Done | `GET /health`, `GET /v1/capabilities`, `POST /v1/agent/query` |
 | Sectors data | Done | Real v2 REST adapter for the 8 endpoints the agent needs, with credit guardrails; verified live on 2026-09-27 (real-data evaluation 8/8). Fictional mock data for tests |
-| Runtime LLM | Partial | Groq `openai/gpt-oss-120b` verified on every LLM path and used in production; Gemini verified for synthesis only. **Final provider not formally decided** |
+| Runtime LLM | In use | Groq `openai/gpt-oss-120b` in production, verified on every LLM path; deterministic rules take over without it. Gemini is supported but verified for synthesis only. The team has not formally closed the provider choice (Phase 6) |
 | Languages | Done | Indonesian and English, detected from each question; the answer and the interface follow it (the ID/EN toggle still sets the interface). Other scripts (e.g. Japanese) get a short bilingual "Indonesian and English only" reply |
 | Frontend (Next.js) | Implemented; refinement ongoing | Bilingual landing page with a sticky section menu and banking glossary; watchlist; full per-browser history; peer small multiples and evidence-backed trend line; replies for non-research questions; a context-aware follow-up per result; reorderable widgets; evidence explorer and agent trace (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
@@ -45,20 +47,25 @@ been used (49 during Phase 4, 9 on the deployment, about 94 in three end-to-end 
 | Analytics & validation | Deterministic Python code (no LLM arithmetic) | Implemented |
 | Data source | Sectors v2 REST API (`https://api.sectors.app/v2/`) through `SectorsService` → `SectorsAdapter` | Implemented (real + mock adapter) |
 | Runtime LLM | Provider-agnostic `LLMProvider` interface; Groq and Gemini providers over their REST APIs | Optional; see below |
-| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Recharts, lucide-react | Implemented; refinement ongoing (`frontend/`) |
+| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Recharts, GSAP, Motion, lucide-react | Implemented; refinement ongoing (`frontend/`) |
 | Tests | pytest + ruff (backend); `node:test`, ESLint, `tsc` (frontend) | Implemented |
 | Deployment | Vercel: two projects from this repository (frontend, and the FastAPI backend as one Python function); Upstash Redis for shared state | Deployed (Hobby plan, region `iad1`) |
 
-**Which LLM is used right now?**
+**Which LLM is used where?**
 
-- The code default is `LLM_PROVIDER=none`: no LLM, every decision uses the
-  deterministic rules. The agent is fully functional this way.
-- The setup the team develops and evaluates with is **Groq, model
-  `openai/gpt-oss-120b`** (`LLM_PROVIDER=groq`). It is the only provider verified
-  live on every LLM path (see Current Status).
-- Gemini is supported but only verified live for synthesis.
-- The final provider and model are **not decided** (Phase 6). Switching is a
-  configuration change only.
+| Where | LLM | Data |
+|---|---|---|
+| Production (https://idx-insight.vercel.app) | **Groq, `openai/gpt-oss-120b`** | Real Sectors data |
+| Local development, as the team runs it | Groq, from `.env` (`LLM_PROVIDER=groq`) | Mock by default; real with `SECTORS_DATA_MODE=real` |
+| Vercel Preview (branch pushes) | none | none: the frontend has no backend there |
+| Automated tests and the rules-only evaluation | none (tests use `MockLLMProvider`) | Mock |
+
+The LLM is optional by design. If `LLM_PROVIDER` is not set, the code falls back to
+`none` and every decision is taken by the deterministic rules; the same rules take
+over whenever Groq is unavailable or rate-limited, so the product keeps working.
+Groq is the only provider verified live on every LLM path. Gemini is supported but
+verified live for synthesis only. Changing provider or model is a configuration
+change.
 
 ## Running Locally: Mock Mode vs Real Data Mode
 
@@ -93,13 +100,13 @@ deployed backend requires a secret.
 | Data | Fictional fixtures that mirror Sectors response shapes (`sectors/mock_data.py`) | Live Sectors v2 API |
 | Settings | `SECTORS_DATA_MODE=mock` | `SECTORS_DATA_MODE=real` + `SECTORS_API_KEY` |
 | Sectors credits | **0** | Spent per question (see below) |
-| LLM | Recommended `LLM_PROVIDER=none` (0 LLM quota) | `LLM_PROVIDER=groq` + `LLM_MODEL=openai/gpt-oss-120b` + `GROQ_API_KEY` |
+| LLM | Either: `LLM_PROVIDER=none` (rules only, no LLM quota) or `groq` (the team's usual setup for trying the UI and the routing) | `LLM_PROVIDER=groq` + `LLM_MODEL=openai/gpt-oss-120b` + `GROQ_API_KEY` |
 | UI label | "Terhubung · data mock", results marked as test data | "Terhubung · data Sectors" |
 | Allowed in the demo/videos | **No** (hackathon rule: real data only) | Yes |
 
-Mock mode with an LLM enabled still spends LLM quota (Groq free tier:
-about 8,000 tokens per minute observed), so use `LLM_PROVIDER=none` unless you are
-testing the LLM paths.
+Mock mode with an LLM enabled spends no Sectors credits but does spend Groq quota
+(about 8,000 tokens per minute observed on the free tier), shared with production
+because the key is the same. Use `LLM_PROVIDER=none` when the LLM paths do not matter.
 
 ### Mock mode (no credits)
 
@@ -107,6 +114,8 @@ testing the LLM paths.
 # terminal 1: backend
 cd backend
 SECTORS_DATA_MODE=mock LLM_PROVIDER=none ../.venv/bin/python -m uvicorn idx_insight.api.app:app --reload --port 8000
+# or, with the LLM (mock data, Groq quota only):
+SECTORS_DATA_MODE=mock LLM_PROVIDER=groq ../.venv/bin/python -m uvicorn idx_insight.api.app:app --reload --port 8000
 
 # terminal 2: frontend
 cd frontend
@@ -123,15 +132,9 @@ depan untuk bank dalam watchlist?". The fixtures include deliberate edge cases
 data gaps and warnings.
 
 For a local production preview, run `npm run build` and then
-`npm run start -- --hostname 127.0.0.1 --port 3000` from `frontend/`.
-`npm run start` alone serves the **last successful build**, which may be older
-than the source files. On 2026-10-05, that last build served `/` and `/research`
-with HTTP 200, reported a
-connected mock/rules-only backend, and answered a sample peer question with HTTP
-200 without credits or LLM calls. It predates the latest proxy security edits;
-the check confirms the UI and connection, not the current security code. Next.js
-dev mode on that machine opened the port but did not answer page requests, so a
-fresh build is still needed before verifying the latest source in a browser.
+`npm run start -- --hostname 127.0.0.1 --port 3000` from `frontend/`. `npm run start`
+serves the last build, so build again after changing the source. Builds do not use the
+Turbopack build cache (see [Deployment](#deployment-vercel)).
 
 ### Real data mode (spends credits)
 
@@ -161,8 +164,10 @@ credits, a four-bank comparison ≈ 8, sector-wide disclosure discovery ≈ 16�
 
 Ways to save credits:
 
-- Repeated questions are served from the local cache (`SECTORS_CACHE_MODE=readwrite`,
-  the default) at no cost.
+- A Sectors call repeated with the same parameters is served from the local response
+  cache while it is fresh (`SECTORS_CACHE_MODE=readwrite`, the default) at no cost; see
+  [Data Freshness and Caching](#data-freshness-and-caching). The answer cache exists only
+  on the deployment.
 - `SECTORS_CACHE_MODE=replay` answers **only** from the cache and never calls the
   API (0 credits). Use it to rehearse a demo with questions that were already asked.
 - `python -m tools.sectors_probe` shows a plan without calling anything; add
@@ -211,7 +216,8 @@ caps would silently reset. With Redis:
 - **Credit ledger**: the worst-case cost is reserved atomically in Redis before each
   Sectors call and corrected to the actual cost afterwards, so concurrent requests
   cannot pass a cap together. If Redis is unreachable, Sectors calls are refused.
-- **Sectors cache**: raw responses expire with the same freshness rules as locally.
+- **Sectors cache**: raw responses expire with the same freshness rules as locally
+  (see [Data Freshness and Caching](#data-freshness-and-caching)).
 - **Answer cache**: a repeated question (same wording, scope, language and day) is
   answered without a new run and without spending credits or LLM quota.
 - **Usage limits**: runs per client and per day, LLM calls per day (then rules-only
@@ -220,6 +226,12 @@ caps would silently reset. With Redis:
 
 `backend/.vercelignore` keeps `backend/.sectors_local/` (real Sectors data) and
 development files out of any upload, including CLI deployments.
+
+The frontend builds without the Turbopack build cache
+(`experimental.turbopackFileSystemCacheForBuild: false` in `next.config.ts`). Next.js
+16.3 enables that cache by default and Vercel restores it between deployments; on
+2026-10-05 it shipped an old stylesheet and the landing page rendered unstyled. The
+prerender test now checks that the linked stylesheet contains the current rules.
 
 ### Vercel Firewall rules
 
@@ -271,7 +283,9 @@ it matters using relevant contextual data.
 The agent makes explicit, recorded decisions at each step:
 
 0. **Detect the language** of the question (Indonesian or English); the whole
-   briefing, including numbers (`23,5%` vs `23.5%`), follows it.
+   briefing, including numbers (`23,5%` vs `23.5%`), follows it. A message mostly in
+   another script (e.g. Japanese) gets a bilingual "Indonesian and English only" reply
+   with no LLM or Sectors call.
 1. **Resolve** companies (tickers, aliases and watchlist, verified against
    Sectors with a bounded number of calls), sector, timeframe and intent.
    Ambiguous companies trigger a clarification question instead of a guess;
@@ -291,8 +305,8 @@ The agent makes explicit, recorded decisions at each step:
    events with evidence, and remove duplicates.
 4. **Rank relevance** with deterministic rules (ownership-change size,
    transaction value, insider trades, dividend/AGM dates, event clusters, watchlist).
-5. **Decide second-hop research** (hybrid): the two most material events are
-   always researched; the LLM may add others through a
+5. **Decide second-hop research** (hybrid): the two most material events with a
+   relevance score of at least 50 are always researched; the LLM may add others through a
    `request_financial_context` tool call, choosing a fixed reason category
    (`dividend_capacity`, `ownership_shift`, `governance_decision`,
    `corporate_action_context`). Code enforces the guards (only listed events,
@@ -317,7 +331,7 @@ Sectors call, one widened filing window when results are empty, a prior-year
 re-query for missing comparison quarters, a per-request tool-call budget, and a
 cap of four LLM calls per request.
 
-Example trace for *"Apa saja disclosure yang perlu saya pantau minggu depan untuk sektor perbankan?"* (rules-only mode):
+Example trace for *"Apa saja disclosure yang perlu saya pantau minggu depan untuk sektor perbankan?"* (rules only, mock data):
 
 ```
 Entities resolved → Intent resolved (discovery) → Timeframe resolved (2026-09-28 s/d 2026-10-04)
@@ -338,7 +352,7 @@ flowchart LR
     ORCH --> FIN[Financial context]
     ORCH --> VAL[Evidence Validator + sufficiency]
     ORCH --> SYN[Synthesis + grounding guard]
-    RES -.low confidence.-> GW[AgentLLM gateway]
+    RES -.unclear messages.-> GW[AgentLLM gateway]
     PLAN -.-> GW
     REL -.tool call.-> GW
     SYN -.-> GW
@@ -350,7 +364,7 @@ flowchart LR
     FIN --> SVC
     SVC --> ADP{SectorsAdapter}
     ADP --> MOCK[MockSectorsAdapter]
-    ADP -.Phase 4.-> REAL[Real MCP/REST adapter]
+    ADP --> REAL[RestSectorsAdapter - v2 REST]
     FIN --> AN[Deterministic analytics]
     REL --> AN
 ```
@@ -433,6 +447,52 @@ for judging. Until the team has confirmed the Sectors Terms of Service
 - **Credits are limited.** Each team receives 1,000 hackathon credits for this project
   only. Check the credit budget in PHASE.md before running bulk or live evaluations.
 
+## Data Freshness and Caching
+
+**What Sectors provides, as the agent uses it**
+
+| Data | Granularity | What the agent reads |
+|---|---|---|
+| Financial ratios (ROE, ROA, NIM, cost-to-income, CASA, LDR, CAR) | Yearly, per financial year | Company report `historical_financial_ratio`; the latest full year is compared, earlier years give context (e.g. 2020–2025 for BBRI) |
+| Earnings, revenue, loans, deposits | Quarterly | Quarterly financials: the latest quarter and the same quarter a year earlier, for year-over-year growth |
+| NPL ratio | Yearly | Screener fields `non_performing_loan[year]` / `gross_loan[year]` for the latest full year |
+| Filings (ownership changes, insider transactions) | Per filing date | A look-back window, 14 days by default |
+| Corporate actions (AGM, dividends, stock splits) | Per scheduled date | The window the question asks for (e.g. next week); only dates Sectors already lists |
+| Market prices | End of day | Not used by the agent; Sectors market data is end of day, not real time |
+
+Sectors does not publish future financial-report dates, so the agent never predicts
+them; it reports that limit as a data gap.
+
+**Two caches**
+
+1. **Sectors response cache** (per API call, shared by every question; Redis on the
+   deployment, files locally). A cached response is reused until it expires:
+
+   | Endpoint | Fresh for |
+   |---|---|
+   | Filings, corporate actions (market-wide and per company) | 6 hours |
+   | Financial report dates | 1 day |
+   | Company report, quarterly financials, screener | 24 hours |
+   | Sub-sector list | 7 days |
+
+2. **Answer cache** (the whole response, deployment only). The key is the question
+   (lower-cased, spaces collapsed), the watchlist sent, the sector, the language, the
+   calendar day (UTC), the data mode and the LLM provider and model. A matching question
+   is answered from the cache for **6 hours** (`ANSWER_CACHE_TTL_SECONDS`, 0 disables it),
+   with no Sectors call and no LLM call, and it does not count against the per-visitor
+   limit. A new UTC day (07:00 WIB) always starts fresh.
+
+**What this means for a user**
+
+- A repeated question within 6 hours returns the same answer even if Sectors has
+  published new data in between.
+- A new filing or corporate action can take up to about 12 hours to appear (a filings
+  response up to 6 hours old, then an answer cached for up to 6 hours). Financial
+  figures can lag up to about 30 hours, which is small next to their quarterly and
+  yearly cadence.
+- Every finding still shows its own period and source, so the age of a figure is
+  visible. The interface does not yet show when a cached answer was generated.
+
 ## Mock vs Real Sectors Integration
 
 `SECTORS_DATA_MODE=real` uses `RestSectorsAdapter` over the v2 REST API; `mock`
@@ -479,9 +539,10 @@ The product's runtime LLM is provider-agnostic and optional.
 | `gemini` | Google Gemini API, REST `models/{model}:generateContent` |
 | `groq` | Groq API, REST chat completions |
 
-- **Candidates under evaluation**: a Gemini Flash model (e.g. `gemini-3.8-flash`)
-  and GPT-OSS 120B on Groq (`openai/gpt-oss-120b`). Neither is a final choice,
-  and free-tier availability depends on each provider's current quotas and policies.
+- **In use**: Groq with `openai/gpt-oss-120b` in production and in the team's local
+  setup. The Gemini provider is kept as an alternative (verified live for synthesis
+  only). The team has not formally closed the choice, and free-tier availability depends
+  on each provider's current quotas and policies.
 - **Switching providers** changes configuration only; the Agent Brain is not modified.
 - **Structured output**: schemas are generated from Pydantic models in a
   strict-mode-compatible form (Gemini `responseFormat`, Groq `json_schema` with
@@ -533,8 +594,13 @@ variables already set in the real environment always take precedence.
 
 ## Implemented Features
 
-- Intent resolution (discovery / peer comparison / company context / clarify),
-  advice-request detection, metric bundles, unsupported-metric detection
+- Intent resolution: clear research requests by rules, every other message by the
+  LLM from a closed list (discovery, peer comparison, company context, about, advice,
+  out of scope, clarify); non-research messages answered without Sectors calls, with a
+  validated suggested question; advice-request detection, metric bundles,
+  unsupported-metric detection
+- Per-question language detection (Indonesian or English); other scripts get a
+  bilingual reply
 - Entity resolution with bounded Sectors verification, ambiguity handling and sector scope
 - Timeframe resolution (ID/EN phrasing, ISO ranges, quarters, years, defaults)
 - Guarded LLM planner and LLM-selected second-hop research, both with rule fallbacks
@@ -562,8 +628,9 @@ cd backend
 ```
 
 Windows uses `.venv\Scripts\python` and `.venv\Scripts\ruff` instead.
-The latest local run (2026-10-05) passed **302 backend tests** and
-**24 frontend tests** (`cd frontend && npm test`). Ruff passed for the changed backend files.
+The latest local run (2026-10-05) passed **333 backend tests** with Ruff clean, and
+**26 frontend tests** (`cd frontend && npm test`, after `npm run build`) with typecheck
+and lint clean.
 The backend tests cover agent decisions (resolution, planning, discovery,
 relevance, second-hop with and without an LLM, recovery), analytics, evidence
 validation and sufficiency, the Sectors service and mock adapter, the LLM layer
@@ -572,8 +639,8 @@ structured output, tool calls, error normalisation, configuration), dependency
 direction, bilingual output, the evaluation cases, the API contract and the deployment
 protections (shared store, Redis REST format, shared credit ledger, internal key, usage
 limits, answer cache), and adversarial prompt-injection cases. No test needs an API
-key or network access; tests never read a local `.env`. An offline `npm audit`
-reported zero advisories; a live dependency audit is still pending.
+key or network access; tests never read a local `.env`. `npm audit --omit=dev`
+reported no vulnerabilities on 2026-10-05; a Python dependency audit is still pending.
 
 ### Evaluation
 
@@ -596,10 +663,12 @@ SECTORS_DATA_MODE=real ../.venv/bin/python -m evals.run_eval --cases real --live
 ../.venv/bin/python -m evals.run_eval --cases scope --live --pause 3       # routing, mock data only
 ```
 
-The harness prints the Sectors credits each run used. Latest runs (2026-09-27,
-Groq): mock cases 16/16 with 12 of 13 narratives accepted; real-data cases 8/8
-for 28 credits. The real-data run found a bug the mock could not (sub-sector
-display names such as "Banks" vs the slug "banks"), since fixed.
+The harness prints the Sectors credits each run used. Latest runs: mock cases 20/20
+(2026-10-05, rules only); scope cases 44/44 (2026-10-05, Groq, mock data); real-data
+cases 6/8 live for 31 credits (2026-10-02, Groq), 8/8 from the replay cache after the
+discovery expectation was made to depend on events above the second-hop threshold.
+Earlier real-data runs found bugs the mock could not (sub-sector display names such as
+"Banks" vs the slug "banks", mixed ratio units), since fixed.
 
 To run the API and the UI, see
 [Running Locally: Mock Mode vs Real Data Mode](#running-locally-mock-mode-vs-real-data-mode).
@@ -615,15 +684,16 @@ To run the API and the UI, see
   structured output and tool calling are covered by tests with recorded payloads
   but not yet verified live. Groq strict structured output only works on models
   Groq lists as supporting it.
-- Free-tier rate limits make back-to-back requests fall back to the rules; the
-  final provider, model and tier are not decided.
+- Free-tier rate limits make back-to-back requests fall back to the rules (the answer
+  still works, without LLM routing, planning or narrative).
 - Entity aliases cover a small set of companies; other companies are recognised
   by their ticker.
 - Relevance weights and thresholds are initial heuristics and need tuning on real data.
-- The analysis is built for banks: the metric catalogue (NIM, CASA, LDR, CAR, NPL,
-  cost-to-income) and every evaluation case are about banks. Discovery of disclosures
-  works by ticker and sub-sector in general, but questions about non-bank companies
-  have not been tested.
+- The analysis is built for banks: the bank metrics (NIM, CASA, LDR, CAR, NPL,
+  cost-to-income) are marked not applicable for other companies. Non-bank companies
+  work by ticker (TLKM, ISAT and ASII were tested on the deployment: ROA, ROE, growth,
+  disclosures), but other sectors are recognised only when named by ticker, not by
+  sector name.
 - Only part of the Sectors integration has been exercised through the deployment
   (company report, quarterly financials, filings, per-company corporate actions). The
   market-wide calendar, screener (NPL), sub-sector list and report dates were verified
@@ -648,19 +718,23 @@ To run the API and the UI, see
 Phases are defined in [PHASE.md](PHASE.md); the project is currently in Phase 6.
 
 **Product UI (Phase 5)**
-- Done in the workspace: landing page and glossary, free-ticker watchlist, full
-  IndexedDB research history, research-type detection, ID/EN toggle, progress and
-  error states, peer bar charts, evidence-backed trend line, bank logos, draggable
-  widgets, offline state and mobile layout.
+- Done: bilingual landing page with a sticky section menu and glossary; free-ticker
+  watchlist; full IndexedDB research history; research-type detection; per-question
+  language detection with an ID/EN toggle; replies with suggested questions for
+  non-research messages; a context-aware follow-up per result; progress and error
+  states; peer small multiples; evidence-backed trend line; bank logos; draggable
+  widgets; offline state and mobile layout.
 - Split larger page/workspace components for easier maintenance.
+- Show when a cached answer was generated (the interface shows when the visitor asked).
 - A dedicated multi-period API series would let the trend chart cover more than
   the historical ratio evidence already present in one research response.
 
 **End-to-end validation (Phase 6, in progress)**
 - Done: a local and a deployed real-data run, 10 questions including non-bank and
   English questions (see [docs/e2e-validation.md](docs/e2e-validation.md))
-- Done: ratio-unit fix deployed and re-checked; real-data evaluation re-run (6/8, 31 credits);
-  failure cases for invalid input, missing secret, firewall rate limit, credit cap, offline
+- Done: ratio-unit fix deployed and re-checked; real-data evaluation re-run (6/8 live,
+  31 credits; 8/8 after the expectation fix); failure cases for invalid input, missing
+  secret, firewall rate limit, credit cap, offline
 - Clarify the definition and unit of Sectors' `cost_to_income_ratio`
 - Exercise every Sectors endpoint through the deployed product: sector-wide discovery
   (market-wide calendar), NPL comparison (screener), ambiguous names, unknown tickers
@@ -684,8 +758,8 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently in Phase 6.
   instructions to ignore rules, fabricated claims, HTML or script in questions)
 - Independent re-test of the deployment protections (missing or wrong key, spoofed
   client IP, per-client and firewall limits, keys or backend URL in the browser)
-- `pip-audit` for backend dependencies and a live frontend dependency audit
-  (`npm audit --offline` reported 0 advisories)
+- `pip-audit` for backend dependencies (`npm audit --omit=dev` reported no
+  vulnerabilities on 2026-10-05)
 - GitHub secret scanning and push protection on the public repository
 - Review of the Vercel runtime logs for secrets
 
