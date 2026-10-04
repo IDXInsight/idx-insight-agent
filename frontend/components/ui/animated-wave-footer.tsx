@@ -1,38 +1,39 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Activity, ArrowRight, ArrowUpRight, BookOpen, Pause, Play, ShieldCheck } from "lucide-react";
 import { type Lang, type MessageKey, t } from "@/lib/i18n";
-import { FlipButton } from "@/components/ui/flip-button";
+import { FlipButton, FlipLink } from "@/components/ui/flip-button";
 
 type ResearchView = "home" | "workspace" | "discovery" | "peers" | "company";
+export type StartView = Exclude<ResearchView, "home">;
 
 type AnimatedWaveFooterProps = {
   activeView: ResearchView;
-  onNavigate: (view: Exclude<ResearchView, "home">) => void;
-  onNewResearch: () => void;
-  onOpenGuide: () => void;
-  onOpenTrace: () => void;
+  /** Starts a new research of that type (the footer starts research; the sidebar reopens results). */
+  onStart: (view: StartView) => void;
   lang: Lang;
   /** Connection state shown next to the guide, e.g. "Terhubung · data Sectors". */
   statusLabel: string;
 };
 
-const navigation: { view: Exclude<ResearchView, "home">; label: MessageKey }[] = [
+const navigation: { view: StartView; label: MessageKey }[] = [
   { view: "workspace", label: "nav.workspace" },
   { view: "discovery", label: "nav.discovery" },
   { view: "peers", label: "nav.peers" },
   { view: "company", label: "nav.company" },
 ];
 
-/** Shared footer, adapted from the supplied animated-wave-footer reference. */
-export default function AnimatedWaveFooter({
-  activeView, onNavigate, onNewResearch, onOpenGuide, onOpenTrace, lang, statusLabel,
-}: AnimatedWaveFooterProps) {
+/**
+ * Shared footer, adapted from the supplied animated-wave-footer reference. It is site
+ * navigation: it starts research or moves to a landing-page section, and never opens a modal.
+ */
+export default function AnimatedWaveFooter({ activeView, onStart, lang, statusLabel }: AnimatedWaveFooterProps) {
   const [paused, setPaused] = useState(false);
 
-  function navigate(view: Exclude<ResearchView, "home">) {
-    onNavigate(view);
+  function start(view: StartView) {
+    onStart(view);
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 
@@ -58,13 +59,13 @@ export default function AnimatedWaveFooter({
             </div>
             <p>{t(lang, "heading.line1")}<br />{t(lang, "heading.line2")}</p>
             <span className="wave-footer-description">{t(lang, "footer.description")}</span>
-            <FlipButton className="wave-footer-cta" onClick={() => { onNewResearch(); window.scrollTo({ top: 0, behavior: "instant" }); }} label={t(lang, "footer.cta")} icon={<ArrowRight size={14} aria-hidden="true" />} />
+            <FlipButton className="wave-footer-cta" onClick={() => start("workspace")} label={t(lang, "footer.cta")} icon={<ArrowRight size={14} aria-hidden="true" />} />
           </section>
 
           <nav className="wave-footer-column" aria-labelledby="footer-explore">
             <h2 id="footer-explore">{t(lang, "footer.explore")}</h2>
             {navigation.map(item => (
-              <button key={item.view} aria-current={activeView === item.view ? "page" : undefined} onClick={() => navigate(item.view)}>
+              <button key={item.view} aria-current={activeView === item.view ? "page" : undefined} onClick={() => start(item.view)}>
                 {t(lang, item.label)}<ArrowUpRight size={12} aria-hidden="true" />
               </button>
             ))}
@@ -74,14 +75,15 @@ export default function AnimatedWaveFooter({
             <h2 id="footer-sources">{t(lang, "footer.data")}</h2>
             <a href="https://sectors.app/" target="_blank" rel="noopener noreferrer">Sectors <ArrowUpRight size={12} aria-hidden="true" /><span className="sr-only">{t(lang, "newTab")}</span></a>
             <a href="https://docs.sectors.app/get-started/v2/overview" target="_blank" rel="noopener noreferrer">{t(lang, "footer.docs")} <ArrowUpRight size={12} aria-hidden="true" /><span className="sr-only">{t(lang, "newTab")}</span></a>
-            <button onClick={onOpenTrace}>{t(lang, "footer.process")} <ArrowUpRight size={12} aria-hidden="true" /></button>
+            <Link href="/#journey">{t(lang, "footer.process")} <ArrowUpRight size={12} aria-hidden="true" /></Link>
             <span className="wave-footer-source-note"><ShieldCheck size={14} aria-hidden="true" /> {t(lang, "sidebar.noteTitle")}</span>
           </section>
 
           <section className="wave-footer-column wave-footer-guide" aria-labelledby="footer-guide">
             <h2 id="footer-guide">{t(lang, "footer.know")}</h2>
             <p>{t(lang, "footer.knowText")}</p>
-            <FlipButton className="wave-footer-guide-button" iconPosition="start" onClick={onOpenGuide} label={t(lang, "sidebar.guide")} icon={<BookOpen size={14} aria-hidden="true" />} />
+            <FlipLink href="/#cara-kerja" className="wave-footer-guide-button" iconPosition="start" label={t(lang, "sidebar.guide")} icon={<BookOpen size={14} aria-hidden="true" />} />
+            <Link href="/#glosarium">{t(lang, "nav.glossary")} <ArrowUpRight size={12} aria-hidden="true" /></Link>
             <span className="wave-footer-demo"><span aria-hidden="true" /> {statusLabel}</span>
           </section>
         </div>

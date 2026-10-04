@@ -1,13 +1,14 @@
 "use client";
 
 import { BarChart3, CalendarDays, FileSearch, Sparkles } from "lucide-react";
+import type { LandingCopy } from "@/lib/landing-copy";
 
-export default function HeroRadar() {
+export default function HeroRadar({ copy }: { copy: LandingCopy["radar"] }) {
   return (
     <div
       className="hero-visual"
       role="img"
-      aria-label="Disclosure, Peer lens, dan Evidence mengorbit pusat IDX Insight dengan gelombang radar"
+      aria-label={copy.aria}
     >
       <div className="visual-orbit">
         <span className="radar-ring radar-ring-outer" aria-hidden="true" />
@@ -19,7 +20,7 @@ export default function HeroRadar() {
         <div className="visual-core">
           <Sparkles size={32} />
           <span>IDX INSIGHT</span>
-          <small>RESEARCH AGENT</small>
+          <small>{copy.agent}</small>
         </div>
 
         <div className="orbit-lane orbit-lane-one">
@@ -38,7 +39,7 @@ export default function HeroRadar() {
           </div>
         </div>
       </div>
-      <div className="visual-caption">Satu pertanyaan. Beberapa langkah riset. Bukti yang bisa diperiksa.</div>
+      <div className="visual-caption">{copy.caption}</div>
     </div>
   );
 }

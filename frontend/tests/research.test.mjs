@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addToHistory, guessIntent, parseTickers, tickersIn, watchlistForQuery } from "../lib/research.ts";
+import { addToHistory, guessIntent, nextStep, parseTickers, tickersIn, watchlistForQuery } from "../lib/research.ts";
 import { formatPercent } from "../lib/agent.ts";
 import { t } from "../lib/i18n.ts";
 
@@ -18,6 +18,11 @@ test("sends the watchlist only when the question names no ticker or sector", () 
   assert.deepEqual(watchlistForQuery("Disclosure sektor perbankan minggu depan", banks), []);
   assert.deepEqual(watchlistForQuery("Disclosure apa yang perlu saya pantau minggu depan?", banks), banks);
   assert.deepEqual(watchlistForQuery("Disclosure perbankan di watchlist saya", banks), banks);
+  // Small talk and requests for picks must not turn into a four-bank research run.
+  assert.deepEqual(watchlistForQuery("Lu siapa?", banks), []);
+  assert.deepEqual(watchlistForQuery("Ada ga sih bank yang jelek?", banks), []);
+  assert.deepEqual(watchlistForQuery("Menurutlu bank apa yang perlu gue analisis?", banks), []);
+  assert.deepEqual(watchlistForQuery("Bandingkan profitabilitas bank di daftar pantauan", banks), banks);
 });
 
 test("previews the research type the backend rules would pick", () => {
@@ -49,4 +54,14 @@ test("formats numbers and messages in the interface language", () => {
   assert.equal(formatPercent(0.235, "en"), "23.5%");
   assert.equal(t("en", "box.scopeWatchlist", { n: 4 }), "Scope: watchlist (4 companies)");
   assert.equal(t("id", "note.offline"), "Backend mati, hubungi tim untuk menyalakan lagi.");
+});
+
+test("offers a follow-up built from the open result", () => {
+  assert.deepEqual(nextStep("company", ["BBCA"], [], banks), { kind: "compare", companies: ["BBCA", "BBRI", "BMRI", "BBNI"] });
+  assert.deepEqual(nextStep("company", ["TLKM"], [], banks), { kind: "compare", companies: ["TLKM", "BBCA", "BBRI", "BMRI"] });
+  assert.equal(nextStep("company", ["BBCA"], [], ["BBCA"]), null);
+  assert.deepEqual(nextStep("peers", ["BBCA", "BBRI"], [], banks), { kind: "disclosure", companies: ["BBCA", "BBRI"] });
+  assert.deepEqual(nextStep("discovery", [], ["BBNI", "BBTN", "BBNI"], banks), { kind: "compareEvents", companies: ["BBNI", "BBTN"] });
+  assert.deepEqual(nextStep("discovery", [], ["AGRO"], banks), { kind: "company", companies: ["AGRO"] });
+  assert.equal(nextStep("discovery", [], [], banks), null);
 });

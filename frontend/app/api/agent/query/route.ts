@@ -48,8 +48,8 @@ export async function POST(request: Request): Promise<Response> {
     const response = await backendFetch("/v1/agent/query", {
       method: "POST",
       headers,
-      // The briefing follows the interface language the visitor chose (Indonesian by default).
-      body: JSON.stringify({ query: query.trim(), watchlist: tickers, language: language ?? "id" }),
+      // Without a language the backend detects it from the question (Indonesian or English).
+      body: JSON.stringify({ query: query.trim(), watchlist: tickers, ...(language ? { language } : {}) }),
     }, timeoutMs);
     if (!response.ok) return fail(errorForBackend(response.status, await response.json().catch(() => null)));
     return Response.json(await response.json(), { headers: { "Cache-Control": "no-store" } });

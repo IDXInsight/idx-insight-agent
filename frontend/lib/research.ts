@@ -35,14 +35,19 @@ export function tickersIn(query: string, watchlist: string[] = []): string[] {
 const SECTOR = /\b(sektor|sector|perbankan|banking|banks|bank-bank)\b/i;
 const WATCHLIST_WORD = /\b(watchlist|daftar pantau(an)?|pantauan saya|my list)\b/i;
 
+// Words that make a question without tickers a research question about the watchlist.
+const RESEARCH_WORD = /\b(disclosure|keterbukaan|pantau|memantau|monitor|peristiwa|agenda|jadwal|aksi korporasi|corporate action|rups|agm|dividen|dividend|filing|pengumuman|announcement|upcoming|bandingkan|perbandingan|membandingkan|compare|comparison|kinerja|performa|performance|laba|earnings|profitab\w*|efisiensi|efficiency|rasio|ratio|metrik|metric|roe|roa|nim|npl|ldr|car|casa|pertumbuhan|growth)\b/i;
+
 /**
  * The backend treats every watchlist ticker as a company to research, so the watchlist is
- * sent only when the question names no ticker and no sector of its own (or asks for it).
+ * sent only for a research question that names no ticker or sector of its own (or that
+ * asks about the watchlist). Small talk and vague questions never pull the watchlist in.
  */
 export function watchlistForQuery(query: string, watchlist: string[]): string[] {
   if (tickersIn(query, watchlist).length) return [];
-  if (SECTOR.test(query) && !WATCHLIST_WORD.test(query)) return [];
-  return watchlist;
+  if (WATCHLIST_WORD.test(query)) return watchlist;
+  if (SECTOR.test(query)) return [];
+  return RESEARCH_WORD.test(query) ? watchlist : [];
 }
 
 const DISCOVERY = /\b(disclosure|keterbukaan|pantau|memantau|monitor|event|peristiwa|agenda|jadwal|aksi korporasi|corporate action|rups|agm|dividen|dividend|filing|pengumuman|watch|announcement|upcoming|pay attention)/i;
@@ -60,6 +65,25 @@ export function guessIntent(query: string, watchlist: string[]): ResultView | nu
   if (DISCOVERY.test(query)) return "discovery";
   if (companies >= 2) return "peers";
   return null;
+}
+
+export type NextStep = { kind: "compare" | "compareEvents" | "disclosure" | "company"; companies: string[] };
+
+/**
+ * The most useful follow-up question for an open result, built from that result: compare a
+ * company with its peers, see the disclosures of compared companies, or compare the
+ * companies a discovery surfaced. Null when no follow-up makes sense.
+ */
+export function nextStep(view: ResultView, companies: string[], eventSymbols: string[], watchlist: string[]): NextStep | null {
+  const unique = (list: string[]) => [...new Set(list)];
+  if (view === "company") {
+    const peers = unique([...companies.slice(0, 1), ...watchlist]).slice(0, 4);
+    return companies.length && peers.length >= 2 ? { kind: "compare", companies: peers } : null;
+  }
+  if (view === "peers") return companies.length ? { kind: "disclosure", companies: companies.slice(0, 4) } : null;
+  const surfaced = unique(eventSymbols).slice(0, 4);
+  if (surfaced.length >= 2) return { kind: "compareEvents", companies: surfaced };
+  return surfaced.length === 1 ? { kind: "company", companies: surfaced } : null;
 }
 
 /** Parses "tlkm, ASII bbca.jk" into tickers; returns the invalid tokens separately. */

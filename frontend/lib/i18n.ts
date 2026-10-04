@@ -4,6 +4,8 @@
  */
 
 export type Lang = "id" | "en";
+/** Shared by the landing page and the workspace, so the chosen language follows the visitor. */
+export const LANG_STORAGE_KEY = "idx-insight.lang";
 export const languages: Lang[] = ["id", "en"];
 
 const id = {
@@ -29,7 +31,12 @@ const id = {
   "history.saveError": "Hasil tampil, tetapi riwayat lengkap gagal disimpan di browser ini.",
   "history.clearError": "Riwayat gagal dihapus dari browser ini.",
   "nav.glossary": "Glosarium",
-  "result.compareFour": "Bandingkan 4 bank",
+  "result.next.compare": "Bandingkan dengan peer",
+  "result.next.compareEvents": "Bandingkan emiten yang muncul",
+  "result.next.disclosure": "Lihat disclosure-nya",
+  "result.next.company": "Lihat kinerja {t}",
+  "next.compare": "Bandingkan profitabilitas {list}",
+  "next.disclosure": "Disclosure {list} minggu depan",
   "sidebar.noteTitle": "Dibangun di atas bukti",
   "sidebar.noteText": "Setiap temuan punya sumber. Setiap keterbatasan dijelaskan.",
   "sidebar.guide": "Panduan riset",
@@ -83,6 +90,13 @@ const id = {
   "error.rate_limited": "Terlalu banyak pertanyaan dalam waktu singkat. Tunggu beberapa menit lalu coba lagi.",
   "error.daily_limit": "Kuota riset hari ini sudah habis. Pertanyaan yang pernah diajukan tetap bisa dibuka; coba pertanyaan baru besok.",
   "error.backend_error": "Backend agent mengalami kesalahan. Coba lagi nanti.",
+  "reply.label.about": "TENTANG IDX INSIGHT",
+  "reply.label.advice": "BUKAN SARAN INVESTASI",
+  "reply.label.out_of_scope": "DI LUAR CAKUPAN",
+  "reply.label.clarify": "PERLU KLARIFIKASI",
+  "reply.try": "Coba salah satu:",
+  "suggest.npl": "Bandingkan NPL {list}",
+  "suggest.roe": "Bandingkan ROE {list}",
   "suggest.label": "COBA PERTANYAAN",
   "example.discovery": "Apa saja disclosure yang perlu saya pantau minggu depan untuk sektor perbankan?",
   "example.peers": "Bandingkan BBCA, BBRI, BMRI, dan BBNI dari sisi profitabilitas dan efisiensi",
@@ -270,7 +284,12 @@ const en: Record<MessageKey, string> = {
   "history.saveError": "The result is visible, but its full history could not be saved in this browser.",
   "history.clearError": "Could not clear research history from this browser.",
   "nav.glossary": "Glossary",
-  "result.compareFour": "Compare 4 banks",
+  "result.next.compare": "Compare with peers",
+  "result.next.compareEvents": "Compare these companies",
+  "result.next.disclosure": "See their disclosures",
+  "result.next.company": "See {t}'s performance",
+  "next.compare": "Compare profitability of {list}",
+  "next.disclosure": "Disclosures for {list} next week",
   "sidebar.noteTitle": "Built on evidence",
   "sidebar.noteText": "Every finding has a source. Every limitation is explained.",
   "sidebar.guide": "Research guide",
@@ -323,6 +342,13 @@ const en: Record<MessageKey, string> = {
   "error.rate_limited": "Too many questions in a short time. Wait a few minutes and try again.",
   "error.daily_limit": "Today's research quota is used up. Questions asked before can still be opened; try new questions tomorrow.",
   "error.backend_error": "The agent backend ran into an error. Please try again later.",
+  "reply.label.about": "ABOUT IDX INSIGHT",
+  "reply.label.advice": "NOT INVESTMENT ADVICE",
+  "reply.label.out_of_scope": "OUTSIDE MY SCOPE",
+  "reply.label.clarify": "NEEDS CLARIFICATION",
+  "reply.try": "Try one of these:",
+  "suggest.npl": "Compare NPL of {list}",
+  "suggest.roe": "Compare ROE of {list}",
   "suggest.label": "TRY A QUESTION",
   "example.discovery": "Which banking disclosures should I watch next week?",
   "example.peers": "Compare BBCA, BBRI, BMRI and BBNI on profitability and efficiency",

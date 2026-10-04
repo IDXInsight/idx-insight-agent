@@ -5,7 +5,11 @@ disclosure radar, peer comparison with small-multiple charts, findings, evidence
 explorer, agent trace and a research history. Deployment target: Vercel.
 
 The landing page at `/` explains the agent and banking terms (ROE, ROA, NIM, BOPO,
-cost-to-income, and others). The workspace is at `/research`.
+cost-to-income, and others) in Indonesian or English. Its header stays at the top; the
+section links (research flow, how it works, glossary) scroll to their section and light
+up while it is in view. A clicked section is recorded in the URL (`/#glosarium`);
+scrolling never changes the URL. `/glosarium` redirects to `/#glosarium`. The workspace
+is at `/research`.
 
 ## What the UI shows
 
@@ -22,10 +26,22 @@ synthetic data.
 - **Research box**: the research type (disclosure, comparison, company) is detected
   while typing and highlighted; the backend still decides. The tabs load an example
   question for each type. The line under the box shows the scope that will be sent.
+- **Replies to non-research questions**: "who are you", requests for picks, off-topic
+  and vague questions are answered under the box (labelled About, Not investment advice,
+  Outside my scope, Needs clarification) with clickable research questions, the agent's
+  own suggestion first. They make no Sectors call and are not kept in the history.
+- **Follow-up per result**: one context-aware button: compare a company with its peers,
+  see the disclosures of compared companies, or compare the companies a discovery
+  surfaced (`nextStep` in `lib/research.ts`). It fills the box; it never runs by itself.
+- **Footer and windows**: the footer starts research (Disclosure, Peer lens and Company
+  context open a new research with that tab selected) or moves to a landing-page section
+  (guide, glossary, evidence process); it never opens a modal. A right-hand drawer shows
+  a result's evidence and trace; a centred dialog edits the watchlist.
 - **Watchlist**: any IDX tickers (up to 20, four letters), saved in the browser. It is
-  sent only when the question names no ticker or sector, because the backend researches
-  every watchlist ticker (`lib/research.ts`). Clicking a ticker prepares a company
-  question without running it.
+  sent only for a research question that names no ticker or sector (or that mentions the
+  watchlist), because the backend researches every watchlist ticker (`lib/research.ts`).
+  Small talk never pulls the watchlist in. Clicking a ticker prepares a company question
+  without running it.
 - **Reorderable widgets**: use the grip above a card to move it within its column.
   On touch, drag the grip; with a keyboard, focus it and press Alt + Up/Down.
   The order is saved in this browser separately for Overview, Disclosure, Peer lens,
@@ -35,8 +51,10 @@ synthetic data.
   repeated questions, and reopened without a new API call. Older localStorage results
   are migrated on first visit. The sidebar views
   (Disclosure, Peer lens, Company context) open the latest result of that type.
-- **Language**: ID/EN toggle. The question is sent with that language, so the briefing
-  and the interface match; a saved result keeps the language it was asked in.
+- **Language**: the backend detects the question's language (Indonesian or English);
+  the answer is written in it and the interface switches to it. The ID/EN toggle (also on
+  the landing page) sets the interface; the choice is shared by both pages. A saved
+  result keeps the language it was asked in.
 - **Peer chart**: one column chart per metric, sorted by the direction the backend
   reports as usually favourable, with the peer median as a dashed line. Each company
   keeps one colour across the watchlist, charts and tables (`lib/palette.ts`, validated
@@ -103,7 +121,9 @@ No Sectors or LLM key is ever needed by the frontend.
 
 Done:
 - Workspace connected to the agent API through the server-side proxy
-- Free-ticker watchlist, research history, research-type detection, ID/EN toggle
+- Free-ticker watchlist, research history, research-type detection, detected language
+- Bilingual landing page with a sticky section menu; footer that starts research
+- Replies with suggested research questions for non-research messages
 - Small-multiple peer chart; company colours shared by watchlist, charts and tables
 - Clear offline state instead of example data
 - Progress feedback and localized error messages, including the firewall's 429
@@ -122,6 +142,8 @@ The four bank logos come from [BCA Brand Assets](https://www.bca.co.id/id/tentan
 
 ## Preview deployments
 
-Branch pushes create Preview deployments. Set `IDX_INSIGHT_API_URL` for **Production
-only** in the Vercel project, so previews show the offline state instead of calling the
-production backend with real data (which spends Sectors credits).
+Branch pushes create Preview deployments behind Vercel Authentication. Since
+2026-10-05 `IDX_INSIGHT_API_URL` and `IDX_INSIGHT_API_SECRET` are set for **Production
+only**, so previews show the offline state instead of calling the production backend
+with real data (which spends Sectors credits). Try UI changes locally with the backend
+on mock data and an LLM.
