@@ -52,3 +52,14 @@ test("workspace exposes three reorderable context widgets", { skip: !existsSync(
   assert.match(html, /Pindahkan widget/);
   assert.match(html, /Tarik pegangan/);
 });
+
+test("the stylesheet served with the pages contains the current rules", { skip: !existsSync(landing) && "run `npm run build` first" }, () => {
+  // A stale build cache once shipped an old globals.css: pages rendered without styles.
+  const html = readFileSync(landing, "utf8");
+  const href = html.match(/<link rel="stylesheet" href="\/_next\/([^"]+\.css)"/)?.[1];
+  assert.ok(href, "no stylesheet linked");
+  const css = readFileSync(new URL(`../.next/${href}`, import.meta.url), "utf8");
+  for (const rule of [".site-header-bar", ".hero", ".glossary-card", ".research-box", ".scope-reply", ".sm-card", ".wave-footer"]) {
+    assert.ok(css.includes(rule), `stylesheet misses ${rule}`);
+  }
+});
