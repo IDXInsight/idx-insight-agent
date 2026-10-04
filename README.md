@@ -14,8 +14,7 @@ development and Preview deployments. See [PHASE.md](PHASE.md).
 
 **Live deployed build:** https://idx-insight.vercel.app (real Sectors data, Groq
 `openai/gpt-oss-120b`). Every new question spends Sectors credits; repeated questions
-are answered from a cache. Uncommitted workspace edits described below are not yet
-verified on that deployment.
+are answered from a cache.
 
 Overall: the product works end to end on real data and is deployed. UI refinement,
 end-to-end validation and security testing are in progress; submission materials
@@ -29,12 +28,12 @@ been used (49 during Phase 4, 9 on the deployment, about 94 in three end-to-end 
 | FastAPI backend | Done | `GET /health`, `GET /v1/capabilities`, `POST /v1/agent/query` |
 | Sectors data | Done | Real v2 REST adapter for the 8 endpoints the agent needs, with credit guardrails; verified live on 2026-09-27 (real-data evaluation 8/8). Fictional mock data for tests |
 | Runtime LLM | Partial | Groq `openai/gpt-oss-120b` verified on every LLM path and used in production; Gemini verified for synthesis only. **Final provider not formally decided** |
-| Languages | Done | Indonesian and English; the UI has an ID/EN toggle and asks the agent for the chosen language |
-| Frontend (Next.js) | Implemented; refinement ongoing | Landing page and banking glossary; watchlist; full per-browser history; ID/EN; peer bar charts and evidence-backed trend line; reorderable widgets; evidence explorer and agent trace (see [frontend/README.md](frontend/README.md)) |
+| Languages | Done | Indonesian and English, detected from each question; the answer and the interface follow it (the ID/EN toggle still sets the interface). Other scripts (e.g. Japanese) get a short bilingual "Indonesian and English only" reply |
+| Frontend (Next.js) | Implemented; refinement ongoing | Bilingual landing page with a sticky section menu and banking glossary; watchlist; full per-browser history; peer small multiples and evidence-backed trend line; replies for non-research questions; a context-aware follow-up per result; reorderable widgets; evidence explorer and agent trace (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
-| Security testing | In progress | Local prompt-injection, proxy, auth and quota regression tests pass; live LLM/deployment retest, Python dependency audit, GitHub secret scanning and runtime log review remain. Latest source is not yet rebuilt/deployed |
-| End-to-end validation (Phase 6) | In progress | Three runs on 2026-10-02: 11 questions (local and deployed), real-data evaluation 6/8 live, 8/8 after making the discovery expectation depend on eligible events; failure cases; parser, unit, credit-cap, crash and firewall-message fixes; see [docs/e2e-validation.md](docs/e2e-validation.md) |
+| Security testing | In progress | Prompt-injection, proxy, auth and quota regression tests pass; the proxy's same-origin, content-type and body-size checks were verified locally on 2026-10-05. Live LLM retest, Python dependency audit, GitHub secret scanning and runtime log review remain |
+| End-to-end validation (Phase 6) | In progress | Three real-data runs on 2026-10-02 (11 questions, real-data evaluation 8/8, failure cases) and a local run on 2026-10-05 for non-research questions and languages (scope evaluation 44/44, no Sectors calls); see [docs/e2e-validation.md](docs/e2e-validation.md) |
 | Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
 ## Tech Stack
@@ -200,7 +199,7 @@ Both deploy from `main`. Environment variables:
 | Environment | Backend | Frontend |
 |---|---|---|
 | Production | `SECTORS_DATA_MODE=real`, `LLM_PROVIDER=groq`, `LLM_MODEL`, `SECTORS_API_KEY`, `GROQ_API_KEY`, credit caps, `IDX_INSIGHT_API_SECRET`, `KV_REST_API_URL`/`KV_REST_API_TOKEN` (Upstash, region `iad1`, no eviction) | `IDX_INSIGHT_API_URL`, `IDX_INSIGHT_API_SECRET` |
-| Preview (other branches) | `SECTORS_DATA_MODE=mock`, `LLM_PROVIDER=none`, so branch pushes spend no credits or LLM quota | same as Production |
+| Preview (other branches) | `SECTORS_DATA_MODE=mock`, `LLM_PROVIDER=none`, so branch pushes spend no credits or LLM quota | none: since 2026-10-05 `IDX_INSIGHT_API_URL` and `IDX_INSIGHT_API_SECRET` are Production-only, so a Preview shows the offline state instead of calling the production backend. Previews are also behind Vercel Authentication. Try UI changes locally (mock data + LLM) |
 
 Credits spent by the deployment are in Redis under `idx:credits:total` (Upstash
 console → Data Browser); the local ledger in `backend/.sectors_local/` counts separately.
@@ -276,8 +275,15 @@ The agent makes explicit, recorded decisions at each step:
 1. **Resolve** companies (tickers, aliases and watchlist, verified against
    Sectors with a bounded number of calls), sector, timeframe and intent.
    Ambiguous companies trigger a clarification question instead of a guess;
-   vague timeframes use a documented default recorded as an assumption. The LLM
-   is consulted for intent only when the rules are unsure.
+   vague timeframes use a documented default recorded as an assumption. Clear
+   research requests (companies or a sector plus research words) are decided by
+   rules; the LLM decides every other message from a closed list: the three
+   research intents, `about` (who the agent is, what it can do), `advice` (a
+   judgement or pick without named companies), `out_of_scope` and `clarify`. The
+   non-research intents are answered from fixed templates before any Sectors call,
+   with one research question the LLM suggests (kept only if it is short, a
+   runnable research request and free of advice wording). Without an LLM the rules
+   decide, using the same categories.
 2. **Plan**: choose steps for the intent (discovery, peer comparison or
    single-company context). The LLM may propose the plan; code accepts it only
    if every step is allowed, required steps are present and the order is valid.
@@ -571,10 +577,14 @@ reported zero advisories; a live dependency audit is still pending.
 
 ### Evaluation
 
-`backend/evals/cases.json` holds 17 questions (Indonesian and English) with the
+`backend/evals/cases.json` holds 20 questions (Indonesian and English) with the
 expected decisions on mock data: intent, language, status, second-hop coverage,
 detected conflicts and data gaps. `backend/evals/cases_real.json` holds 8
 structural cases for real data (no fixed values, since real data changes).
+`backend/evals/cases_scope.json` holds 44 varied messages (small talk, slang, mixed
+Indonesian/English, requests for picks, off-topic questions and clear research
+questions); non-research messages must make no Sectors call. It always runs on mock
+data, so it spends LLM quota only.
 Guardrails apply to every case: no advice or speculative language, evidence
 behind every accepted claim.
 
@@ -583,6 +593,7 @@ cd backend
 ../.venv/bin/python -m evals.run_eval                                      # mock, rules-only
 ../.venv/bin/python -m evals.run_eval --live --pause 25                    # mock + LLM from .env
 SECTORS_DATA_MODE=real ../.venv/bin/python -m evals.run_eval --cases real --live --pause 25
+../.venv/bin/python -m evals.run_eval --cases scope --live --pause 3       # routing, mock data only
 ```
 
 The harness prints the Sectors credits each run used. Latest runs (2026-09-27,
@@ -621,6 +632,11 @@ To run the API and the UI, see
   or unit of `cost_to_income_ratio`, and its values differ from commonly reported bank
   cost-to-income ratios.
 - Only Indonesian and English are supported.
+- The LLM routes unclear messages, so the same message can occasionally land in a
+  neighbouring category or come without a suggested question; non-research messages
+  never reach Sectors either way, and fixed example questions are always shown.
+- A capitalised four-letter word in a message (e.g. "HALO") is still checked as a
+  ticker and can cost a credit before the message is classified.
 - The watchlist accepts any IDX ticker, but at most 3 tickers the agent does not know
   yet are verified per question; the rest are reported as unverified.
 - Research history is kept in the visitor's browser only.
@@ -650,6 +666,8 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently in Phase 6.
   (market-wide calendar), NPL comparison (screener), ambiguous names, unknown tickers
 - Cross-check a sample of values against the Sectors app
 - Other sectors (non-bank companies by ticker work)
+- Done (2026-10-05, local): non-research questions, capability questions and other
+  languages are routed without Sectors calls; scope evaluation 44/44
 - Failure cases still to test live: Groq rate limit, Redis unavailable, timeouts
 - Latency and credits per question type
 - Final runtime LLM provider and model
@@ -659,9 +677,9 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently in Phase 6.
   forged proxy IP, cross-origin requests, oversized JSON, mandatory agent steps and
   invalid source links; auth and quota tests pass. A tracked-file key-pattern scan
   found no matches; it did not scan Git history.
-- The LLM now selects cited items without publishing its own prose, and source-provided
-  event titles do not enter the second-hop decision prompt. Rebuild and retest the
-  latest source before treating those protections as deployed.
+- The LLM selects cited items without publishing its own prose, and source-provided
+  event titles do not enter the second-hop decision prompt (deployed with the
+  2026-10-05 release).
 - Still to test prompt injection and advice requests against the live LLM (system-prompt extraction,
   instructions to ignore rules, fabricated claims, HTML or script in questions)
 - Independent re-test of the deployment protections (missing or wrong key, spoofed
@@ -670,8 +688,6 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently in Phase 6.
   (`npm audit --offline` reported 0 advisories)
 - GitHub secret scanning and push protection on the public repository
 - Review of the Vercel runtime logs for secrets
-- Complete frontend typecheck/lint and a current-source browser run; those commands
-  stalled locally while loading dependencies, though the unit suites passed.
 
 **Demo and submission (Phase 7, not started)**
 - One-sentence problem statement; one-minute teaser; judging video of up to three
