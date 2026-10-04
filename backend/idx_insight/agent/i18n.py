@@ -278,15 +278,44 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The requested metric is unavailable; the profitability bundle is shown as "
               "substitute context."},
     "question.clarify": {
-        "id": "Mohon sebutkan emiten (mis. BBCA), sektor (mis. perbankan), atau jenis analisis yang "
-              "Anda inginkan.",
-        "en": "Please name a company (e.g. BBCA), a sector (e.g. banking), or the analysis you want."},
+        "id": "Saya belum menangkap maksudnya. Sebutkan emiten (misalnya BBCA), sektor (misalnya "
+              "perbankan), atau jenis riset yang kamu inginkan.",
+        "en": "I did not quite catch that. Name a company (e.g. BBCA), a sector (e.g. banking), "
+              "or the kind of research you want."},
+    "reply.about": {
+        "id": "Saya IDX Insight, agen riset untuk emiten di Bursa Efek Indonesia, terutama bank. "
+              "Saya mencari disclosure yang perlu dipantau, membandingkan metrik keuangan pada "
+              "periode yang sebanding, dan menunjukkan bukti dari data Sectors untuk setiap temuan.",
+        "en": "I am IDX Insight, a research agent for companies listed on the Indonesia Stock "
+              "Exchange, especially banks. I find the disclosures worth watching, compare financial "
+              "metrics over comparable periods, and show the Sectors evidence behind every finding."},
+    "reply.advice": {
+        "id": "Saya tidak menilai emiten sebagai bagus atau jelek, dan jawaban saya bukan saran "
+              "investasi. Saya bisa menampilkan datanya supaya kamu bisa menilai sendiri, misalnya "
+              "kualitas kredit (NPL) atau profitabilitas (ROE) bank yang kamu pantau.",
+        "en": "I do not rate companies as good or bad, and my answers are not investment advice. "
+              "I can show the data so you can judge for yourself, for example credit quality (NPL) "
+              "or profitability (ROE) of the banks you follow."},
+    "reply.out_of_scope": {
+        "id": "Pertanyaan itu di luar cakupan saya. Saya khusus membantu riset emiten di Bursa Efek "
+              "Indonesia: disclosure yang perlu dipantau, perbandingan metrik keuangan, dan konteks "
+              "kinerja satu emiten.",
+        "en": "That is outside what I can help with. I focus on researching companies listed on the "
+              "Indonesia Stock Exchange: disclosures worth watching, financial metric comparisons, "
+              "and the performance context of one company."},
     "question.discovery_scope": {
         "id": "Untuk memantau disclosure, sebutkan sektor atau daftar emiten (watchlist).",
         "en": "To monitor disclosures, please name a sector or a list of companies (watchlist)."},
     "question.not_found": {
-        "id": "Emiten yang disebut tidak ditemukan. Mohon periksa kode sahamnya.",
-        "en": "The companies mentioned were not found. Please check the ticker codes."},
+        "id": "Saya belum menemukan emiten yang dimaksud. Sebutkan kode sahamnya, misalnya BBCA "
+              "atau TLKM.",
+        "en": "I could not identify the companies you mean. Please give their ticker codes, "
+              "for example BBCA or TLKM."},
+    "reply.language": {
+        "id": "Saat ini saya hanya memahami bahasa Indonesia dan Inggris. / I currently "
+              "understand Indonesian and English only.",
+        "en": "I currently understand English and Indonesian only. / Saat ini saya hanya "
+              "memahami bahasa Inggris dan Indonesia."},
     "clarification.title": {"id": "Klarifikasi diperlukan", "en": "Clarification needed"},
     "gap.unknown_sector": {"id": "Sub-sektor '{slug}' tidak dikenali oleh Sectors.",
                            "en": "Sub-sector '{slug}' is not recognised by Sectors."},

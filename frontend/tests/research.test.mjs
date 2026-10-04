@@ -34,11 +34,14 @@ test("parses ticker input and reports invalid tokens", () => {
   assert.deepEqual(parseTickers("BBC, CASA, ok12"), { tickers: [], invalid: ["BBC", "CASA", "ok12"] });
 });
 
-test("keeps the newest result per question and language", () => {
+test("keeps separate results for repeated questions and more than twelve runs", () => {
   const entry = (id, query, language = "id") => ({ id, query, language, askedAt: "", view: "peers", response: {} });
   const history = addToHistory(addToHistory([entry("1", "Kinerja BBCA")], entry("2", "Kinerja TLKM")), entry("3", "kinerja bbca "));
-  assert.deepEqual(history.map(e => e.id), ["3", "2"]);
-  assert.equal(addToHistory(history, entry("4", "Kinerja BBCA", "en")).length, 3);
+  assert.deepEqual(history.map(e => e.id), ["3", "2", "1"]);
+  assert.equal(addToHistory(history, entry("4", "Kinerja BBCA", "en")).length, 4);
+  const many = Array.from({ length: 20 }, (_, i) => entry(String(i), "Pertanyaan sama"))
+    .reduce((previous, current) => addToHistory(previous, current), []);
+  assert.equal(many.length, 20);
 });
 
 test("formats numbers and messages in the interface language", () => {

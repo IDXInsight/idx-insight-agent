@@ -90,7 +90,7 @@ def test_json_schema_is_strict_mode_compatible():
     assert "$defs" not in json.dumps(schema) and "title" not in schema
     intent = json_schema_for(IntentProposal)
     assert "default" not in json.dumps(intent)
-    assert set(intent["required"]) == {"intent", "skip_second_hop", "rationale"}
+    assert set(intent["required"]) == {"intent", "skip_second_hop", "rationale", "suggested_question"}
 
 
 def _reply(text, finish="stop"):

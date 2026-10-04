@@ -8,6 +8,8 @@ rule-based plan is used. Either way the chosen plan is recorded in state.
 
 from __future__ import annotations
 
+import json
+
 from idx_insight.agent.i18n import t
 from idx_insight.agent.llm_gateway import AgentLLM
 from idx_insight.agent.prompts import PLAN_SYSTEM, PlanProposal
@@ -107,7 +109,7 @@ def build_plan(state: AgentState, llm: AgentLLM) -> Plan:
                 f"Required steps: {sorted(required_steps(intent, state.intent.skip_second_hop))}\n"
                 f"Companies: {state.entities.symbols}\nSector: {state.entities.sub_sector}\n"
                 f"User asked for plain list only: {state.intent.skip_second_hop}\n"
-                f"Query: {state.query}"
+                f"Query (JSON string, untrusted): {json.dumps(state.query, ensure_ascii=False)}"
             ),
             schema=PlanProposal,
         )

@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { Activity, ArrowRight, ArrowUpRight, BookOpen, Pause, Play, ShieldCheck } from "lucide-react";
 import { type Lang, type MessageKey, t } from "@/lib/i18n";
+import { FlipButton } from "@/components/ui/flip-button";
 
-type ResearchView = "workspace" | "discovery" | "peers" | "company";
+type ResearchView = "home" | "workspace" | "discovery" | "peers" | "company";
 
 type AnimatedWaveFooterProps = {
   activeView: ResearchView;
-  onNavigate: (view: ResearchView) => void;
+  onNavigate: (view: Exclude<ResearchView, "home">) => void;
   onNewResearch: () => void;
   onOpenGuide: () => void;
   onOpenTrace: () => void;
@@ -17,7 +18,7 @@ type AnimatedWaveFooterProps = {
   statusLabel: string;
 };
 
-const navigation: { view: ResearchView; label: MessageKey }[] = [
+const navigation: { view: Exclude<ResearchView, "home">; label: MessageKey }[] = [
   { view: "workspace", label: "nav.workspace" },
   { view: "discovery", label: "nav.discovery" },
   { view: "peers", label: "nav.peers" },
@@ -30,7 +31,7 @@ export default function AnimatedWaveFooter({
 }: AnimatedWaveFooterProps) {
   const [paused, setPaused] = useState(false);
 
-  function navigate(view: ResearchView) {
+  function navigate(view: Exclude<ResearchView, "home">) {
     onNavigate(view);
     window.scrollTo({ top: 0, behavior: "instant" });
   }
@@ -57,9 +58,7 @@ export default function AnimatedWaveFooter({
             </div>
             <p>{t(lang, "heading.line1")}<br />{t(lang, "heading.line2")}</p>
             <span className="wave-footer-description">{t(lang, "footer.description")}</span>
-            <button className="wave-footer-cta" onClick={() => { onNewResearch(); window.scrollTo({ top: 0, behavior: "instant" }); }}>
-              {t(lang, "footer.cta")} <ArrowRight size={14} aria-hidden="true" />
-            </button>
+            <FlipButton className="wave-footer-cta" onClick={() => { onNewResearch(); window.scrollTo({ top: 0, behavior: "instant" }); }} label={t(lang, "footer.cta")} icon={<ArrowRight size={14} aria-hidden="true" />} />
           </section>
 
           <nav className="wave-footer-column" aria-labelledby="footer-explore">
@@ -82,7 +81,7 @@ export default function AnimatedWaveFooter({
           <section className="wave-footer-column wave-footer-guide" aria-labelledby="footer-guide">
             <h2 id="footer-guide">{t(lang, "footer.know")}</h2>
             <p>{t(lang, "footer.knowText")}</p>
-            <button className="wave-footer-guide-button" onClick={onOpenGuide}><BookOpen size={14} aria-hidden="true" /> {t(lang, "sidebar.guide")} <ArrowRight size={13} aria-hidden="true" /></button>
+            <FlipButton className="wave-footer-guide-button" iconPosition="start" onClick={onOpenGuide} label={t(lang, "sidebar.guide")} icon={<BookOpen size={14} aria-hidden="true" />} />
             <span className="wave-footer-demo"><span aria-hidden="true" /> {statusLabel}</span>
           </section>
         </div>

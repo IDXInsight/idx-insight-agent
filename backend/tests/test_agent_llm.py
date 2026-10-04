@@ -57,6 +57,13 @@ def test_llm_adds_second_hop_research_through_a_tool_call(run):
     assert researched(state) == {"BBNI", "BBRI", "BBTN"}
 
 
+def test_second_hop_prompt_excludes_source_supplied_event_titles(run):
+    llm = MockLLMProvider({"second_hop": MockLLMProvider.tool_calls()})
+    state = run(DISCOVERY_Q, llm=llm)
+    prompt = next(r for r in llm.requests if r.purpose == "second_hop").messages[-1].content
+    assert all(event.title not in prompt for event in state.relevant_events)
+
+
 def test_llm_second_hop_still_obeys_company_cap(run):
     baseline = run(DISCOVERY_Q)
     calls = [(TOOL, {"event_id": e.event_id, "category": "ownership_shift"})

@@ -1,5 +1,6 @@
 from datetime import date
 
+import pytest
 from conftest import AS_OF, gateway
 
 from idx_insight.agent.entities import EntityResolver
@@ -142,6 +143,15 @@ def test_llm_refines_low_confidence_intent():
     assert intent.name == "discovery" and intent.source == "llm"
 
 
+def test_llm_cannot_skip_required_research_without_explicit_plain_list_request():
+    q = "BBCA dan BBRI"
+    entities, _ = resolve(q)
+    provider = MockLLMProvider({"intent": MockLLMProvider.structured(
+        IntentProposal(intent="discovery", skip_second_hop=True, rationale="skip it"))})
+    intent = resolve_intent(q, entities, gateway(provider))
+    assert intent.name == "discovery" and not intent.skip_second_hop
+
+
 def test_llm_not_consulted_when_rules_are_confident():
     q = "Bandingkan BBCA dan BBRI"
     entities, _ = resolve(q)
@@ -199,3 +209,134 @@ def test_peer_comparison_survives_when_every_sectors_call_is_refused(run):
     state = run("Bandingkan BBCA dan BBRI dari sisi profitabilitas", adapter=_CreditCappedAdapter())
     assert state.status == "insufficient_evidence"
     assert [g for g in state.data_gaps if g.kind == "budget_exhausted"]
+
+
+@pytest.mark.parametrize("query, name", [
+    ("Lu siapa?", "about"),
+    ("What can you do?", "about"),
+    ("Ada ga sih bank yang jelek?", "advice"),
+    ("Menurutlu bank apa yang perlu gue analisis?", "advice"),
+    ("Should I buy bank stocks now?", "advice"),
+])
+def test_questions_outside_research_are_recognised_by_rules(query, name):
+    entities, _ = resolve(query)
+    assert rule_intent(query, entities).name == name
+
+
+def test_a_named_company_keeps_advice_questions_on_the_research_path():
+    q = "Apakah BBCA layak dibeli?"
+    entities, _ = resolve(q)
+    intent = rule_intent(q, entities)
+    assert intent.name == "company_context" and intent.advice_requested
+
+
+def test_questions_outside_research_spend_no_sectors_calls(run):
+    for query in ("Lu siapa?", "Ada ga sih bank yang jelek?"):
+        state = run(query)
+        assert state.status == "needs_clarification" and state.tool_calls == []
+        assert state.briefing.clarification_question
+
+
+def test_ordinary_english_words_are_not_read_as_a_judgement():
+    q = "Tolong terjemahkan good morning ke bahasa Jepang"
+    entities, _ = resolve(q)
+    assert rule_intent(q, entities).name != "advice"
+
+
+@pytest.mark.parametrize("query", ["kamu bisa analisis saham?", "Can you analyse Indonesian bank stocks?"])
+def test_capability_questions_are_about_the_agent(query):
+    entities, _ = resolve(query)
+    assert rule_intent(query, entities).name == "about"
+
+
+def test_a_capability_question_with_companies_stays_research():
+    q = "Kamu bisa bandingkan ROE BBCA dan BBRI?"
+    entities, _ = resolve(q)
+    assert rule_intent(q, entities).name == "peer_comparison"
+
+
+def _brain(**proposal):
+    return gateway(MockLLMProvider({"intent": MockLLMProvider.structured(
+        IntentProposal(rationale="x", **proposal))}))
+
+
+def test_the_llm_decides_the_direction_of_unscoped_messages():
+    q = "kamu bisa analisis saham?"
+    entities, _ = resolve(q)
+    intent = resolve_intent(q, entities, _brain(intent="about"))
+    assert intent.name == "about" and intent.source == "llm"
+
+
+def test_the_llm_overrules_a_rule_hint_that_misreads_the_message():
+    q = "Ada ga sih bank yang jelek?"
+    entities, _ = resolve(q)
+    assert rule_intent(q, entities).name == "advice"
+    assert resolve_intent(q, entities, _brain(intent="clarify")).name == "clarify"
+
+
+def test_rule_hints_stand_when_the_llm_is_unavailable():
+    q = "Ada ga sih bank yang jelek?"
+    entities, _ = resolve(q)
+    assert resolve_intent(q, entities, gateway(None)).name == "advice"
+
+
+def test_suggested_research_question_is_kept_when_clean():
+    q = "Ada ga sih bank yang jelek?"
+    entities, _ = resolve(q)
+    intent = resolve_intent(q, entities, _brain(
+        intent="advice", suggested_question="Bandingkan NPL dan ROE bank di watchlist saya"))
+    assert intent.suggestion == "Bandingkan NPL dan ROE bank di watchlist saya"
+
+
+@pytest.mark.parametrize("suggestion", [
+    "Beli BBCA sekarang sebelum naik",       # advice wording
+    "x" * 200,                               # too long
+    "Ada ga sih bank yang jelek?",           # just repeats the question
+    "Anda ingin analisis perusahaan mana?",  # a question back to the user
+    "Bank apa yang sedang bermasalah?",      # not a research request the agent can run
+])
+def test_unsafe_or_useless_suggestions_are_dropped(suggestion):
+    q = "Ada ga sih bank yang jelek?"
+    entities, _ = resolve(q)
+    brain = _brain(intent="advice", suggested_question=suggestion)
+    assert resolve_intent(q, entities, brain).suggestion is None
+
+
+def test_named_companies_keep_judgement_questions_on_the_research_path():
+    q = "BBCA dan BBRI mana yang jelek?"
+    entities, _ = resolve(q)
+    intent = resolve_intent(q, entities, _brain(intent="advice"))
+    assert intent.name in {"peer_comparison", "company_context", "discovery"}
+
+
+def test_clarification_carries_the_suggestion_to_the_briefing(run):
+    llm = MockLLMProvider({"intent": MockLLMProvider.structured(IntentProposal(
+        intent="advice", rationale="x", suggested_question="Bandingkan ROE bank di watchlist saya"))})
+    state = run("Menurutmu bank apa yang menarik?", llm=llm)
+    assert state.status == "needs_clarification" and state.tool_calls == []
+    assert state.briefing.suggestions == ["Bandingkan ROE bank di watchlist saya"]
+
+
+@pytest.mark.parametrize("query, expected", [
+    ("kamu sejago apa", "id"),
+    ("seberapa bagus BCA", "id"),
+    ("bank mana yg lagi cuan?", "id"),
+    ("Who are you?", "en"),
+    ("Is any bank in trouble right now?", "en"),
+])
+def test_everyday_language_is_detected(query, expected):
+    from idx_insight.agent.language import detect_language
+    assert detect_language(query) == expected
+
+
+@pytest.mark.parametrize("query", ["BCAとBRIを比較する", "あなたは誰ですか", "مرحبا كيف حالك"])
+def test_unsupported_scripts_get_a_bilingual_reply_without_any_call(run, query):
+    state = run(query)
+    assert state.status == "needs_clarification" and state.tool_calls == [] and state.llm_calls == []
+    assert "Indonesia" in state.briefing.clarification_question
+    assert "English" in state.briefing.clarification_question
+
+
+def test_indonesian_with_accented_or_latin_names_is_supported():
+    from idx_insight.agent.language import unsupported_script
+    assert not unsupported_script("Bandingkan BBCA dan BBRI — kinerja café & résumé")

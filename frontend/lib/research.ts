@@ -84,12 +84,9 @@ export type HistoryEntry = {
   response: AgentResponse;
 };
 
-export const MAX_HISTORY = 12;
-
-/** Newest first, one entry per question and language (a repeat replaces the older entry). */
+/** Newest first; repeated questions remain separate research runs. */
 export function addToHistory(history: HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
-  const key = (e: HistoryEntry) => `${e.language}:${e.query.trim().toLowerCase()}`;
-  return [entry, ...history.filter(e => key(e) !== key(entry))].slice(0, MAX_HISTORY);
+  return [entry, ...history.filter(e => e.id !== entry.id)];
 }
 
 /** Reads a JSON value from localStorage; any failure (private mode, bad data) gives the fallback. */
