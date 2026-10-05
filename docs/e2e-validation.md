@@ -1,5 +1,9 @@
 # End-to-End Validation (Phase 6)
 
+Latest run: [5 October 2026 deployment cross-check and fixes](e2e-validation-2026-10-05.md).
+Thirteen production questions, source-value and calendar checks, local fixes and
+proxy retests; browser visual checks and post-deployment fix retests remain pending.
+
 Results of running the complete product (Next.js → FastAPI → Agent Brain → Sectors →
 validation → LLM synthesis → UI) on real data. Each run lists what was asked, what the
 product did, and what changed because of it.

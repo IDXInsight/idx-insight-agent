@@ -9,19 +9,29 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 ## Current Status
 
 **Phases 0–5 implemented; Phase 6 (end-to-end validation) is in progress.** The
-deployed workspace uses real Sectors data; mock data remains for tests, local
-development and Preview deployments. See [PHASE.md](PHASE.md).
+deployed workspace uses real Sectors data; mock data remains for tests and local
+development. Vercel Preview has no backend connection. See [PHASE.md](PHASE.md).
 
 **Live deployed build:** https://idx-insight.vercel.app (real Sectors data, Groq
 `openai/gpt-oss-120b`). A new research question spends Sectors credits. Repeated
-questions are answered from a cache, and replies to non-research messages (e.g. "who are
-you?") make no Sectors call; see [Data Freshness and Caching](#data-freshness-and-caching).
+cacheable questions can be answered from a fresh cache. Ordinary non-research messages
+(e.g. "who are you?") make no Sectors call, but entity verification can call Sectors
+first for an unknown ticker-like word; see [Known Limitations](#known-limitations)
+and [Data Freshness and Caching](#data-freshness-and-caching).
 
 Overall: the product works end to end on real data and is deployed. UI refinement,
 end-to-end validation and security testing are in progress; submission materials
-have not started. About 152 of 1,000 Sectors credits have been used (49 during
-Phase 4, 9 on the deployment, about 94 in three end-to-end runs on 2026-10-02); the
-2026-10-05 work used mock data and spent none.
+have not started. The previously documented spend was about 152 of 1,000 Sectors
+credits through 2026-10-02. The latest 2026-10-05 source cross-check spent 7 additional
+local credits; production spend for that run was not measured. Reconcile the local
+and Redis ledgers with the Sectors dashboard before reporting the remaining budget.
+
+**Latest validation (2026-10-05):** 13 distinct questions through the deployed
+website's API proxy; 18 numeric checks and 2 calendar checks passed. Six defects
+were fixed in the local repository, and the four main fixes passed local proxy
+retests with real-data replay. **These fixes have not been deployed; visual browser
+checks and post-deployment retests are still pending.** See the
+[validation report](docs/e2e-validation-2026-10-05.md).
 
 | Area | State | Details |
 |---|---|---|
@@ -34,8 +44,8 @@ Phase 4, 9 on the deployment, about 94 in three end-to-end runs on 2026-10-02); 
 | Frontend (Next.js) | Implemented; refinement ongoing | Bilingual landing page with a sticky section menu and banking glossary; watchlist; full per-browser history; peer small multiples and evidence-backed trend line; replies for non-research questions; a context-aware follow-up per result; reorderable widgets; evidence explorer and agent trace (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
-| Security testing | In progress | Prompt-injection, proxy, auth and quota regression tests pass; the proxy's same-origin, content-type and body-size checks were verified locally on 2026-10-05. Live LLM retest, Python dependency audit, GitHub secret scanning and runtime log review remain |
-| End-to-end validation (Phase 6) | In progress | Three real-data runs on 2026-10-02 (11 questions, real-data evaluation 8/8, failure cases) and a local run on 2026-10-05 for non-research questions and languages (scope evaluation 44/44, no Sectors calls); see [docs/e2e-validation.md](docs/e2e-validation.md) |
+| Security testing | In progress | Local regression checks pass. A live fabricated-number injection and an advice request passed on 2026-10-05; broader live injection tests, Python dependency audit, GitHub secret scanning and runtime log review remain |
+| End-to-end validation (Phase 6) | In progress | Earlier real-data runs and scope evaluation 44/44; latest deployment run: 13 questions, 18 numeric and 2 calendar checks passed. Local fixes verified; deployment retests and visual checks pending. See [latest report](docs/e2e-validation-2026-10-05.md) |
 | Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
 ## Tech Stack
@@ -166,8 +176,8 @@ Ways to save credits:
 
 - A Sectors call repeated with the same parameters is served from the local response
   cache while it is fresh (`SECTORS_CACHE_MODE=readwrite`, the default) at no cost; see
-  [Data Freshness and Caching](#data-freshness-and-caching). The answer cache exists only
-  on the deployment.
+  [Data Freshness and Caching](#data-freshness-and-caching). The answer cache also works
+  locally in process memory; restarting the backend clears that local answer cache.
 - `SECTORS_CACHE_MODE=replay` answers **only** from the cache and never calls the
   API (0 credits). Use it to rehearse a demo with questions that were already asked.
 - `python -m tools.sectors_probe` shows a plan without calling anything; add
@@ -294,7 +304,8 @@ The agent makes explicit, recorded decisions at each step:
    rules; the LLM decides every other message from a closed list: the three
    research intents, `about` (who the agent is, what it can do), `advice` (a
    judgement or pick without named companies), `out_of_scope` and `clarify`. The
-   non-research intents are answered from fixed templates before any Sectors call,
+   non-research intents are answered from fixed templates without research calls
+   (earlier entity verification may already have called Sectors),
    with one research question the LLM suggests (kept only if it is short, a
    runnable research request and free of advice wording). Without an LLM the rules
    decide, using the same categories.
@@ -326,8 +337,9 @@ The agent makes explicit, recorded decisions at each step:
    whole narrative if a sentence cites an unknown item, uses a number that
    is not in the items it cites, or contains advice or speculative language.
 
-Bounded recovery happens where the problem appears: at most one retry per
-Sectors call, one widened filing window when results are empty, a prior-year
+Bounded recovery happens where the problem appears: at most one adapter retry per
+Sectors service call, plus up to two HTTP retries for a 429 inside each adapter
+invocation (1 s and 2 s backoff), one widened filing window when results are empty, a prior-year
 re-query for missing comparison quarters, a per-request tool-call budget, and a
 cap of four LLM calls per request.
 
@@ -475,12 +487,15 @@ them; it reports that limit as a data gap.
    | Company report, quarterly financials, screener | 24 hours |
    | Sub-sector list | 7 days |
 
-2. **Answer cache** (the whole response, deployment only). The key is the question
+2. **Answer cache** (the whole response; Redis on deployment, process memory locally).
+   Only eligible responses are cached: insufficient-evidence results and results
+   with failed data calls are excluded. The key is the question
    (lower-cased, spaces collapsed), the watchlist sent, the sector, the language, the
    calendar day (UTC), the data mode and the LLM provider and model. A matching question
    is answered from the cache for **6 hours** (`ANSWER_CACHE_TTL_SECONDS`, 0 disables it),
    with no Sectors call and no LLM call, and it does not count against the per-visitor
-   limit. A new UTC day (07:00 WIB) always starts fresh.
+   limit. For website requests, a new UTC day (07:00 WIB) starts a new key. API callers
+   supplying an explicit `as_of` use that date in the key instead.
 
 **What this means for a user**
 
@@ -588,7 +603,7 @@ variables already set in the real environment always take precedence.
 | `STORAGE_PREFIX` | key prefix in Redis (default `idx:`) |
 | `RATE_LIMIT_PER_IP` / `RATE_LIMIT_WINDOW_SECONDS` | agent runs per client per window (default 5 per 600 s) |
 | `MAX_QUERIES_PER_DAY` | agent runs per day across all clients (default 150) |
-| `LLM_MAX_CALLS_PER_DAY` | LLM calls per day; beyond it answers use the rules (default 300) |
+| `LLM_MAX_CALLS_PER_DAY` | Daily LLM admission threshold (default 300); checked before a run, counted afterward. A run or concurrent runs can exceed it; subsequent runs use rules |
 | `QUERY_CREDIT_HEADROOM` | refuse a new run when fewer Sectors credits remain under a cap (default 10) |
 | `ANSWER_CACHE_TTL_SECONDS` | how long a repeated question is answered from the cache (default 6 h; 0 disables) |
 
@@ -596,7 +611,8 @@ variables already set in the real environment always take precedence.
 
 - Intent resolution: clear research requests by rules, every other message by the
   LLM from a closed list (discovery, peer comparison, company context, about, advice,
-  out of scope, clarify); non-research messages answered without Sectors calls, with a
+  out of scope, clarify); non-research messages answered without research calls
+  (earlier entity verification can still call Sectors), with a
   validated suggested question; advice-request detection, metric bundles,
   unsupported-metric detection
 - Per-question language detection (Indonesian or English); other scripts get a
@@ -628,9 +644,12 @@ cd backend
 ```
 
 Windows uses `.venv\Scripts\python` and `.venv\Scripts\ruff` instead.
-The latest local run (2026-10-05) passed **333 backend tests** with Ruff clean, and
-**26 frontend tests** (`cd frontend && npm test`, after `npm run build`) with typecheck
-and lint clean.
+The latest local run (2026-10-05) passed **342 backend tests**, with Ruff clean on
+the changed agent/test files, and **28 frontend tests** (`cd frontend && npm test`,
+after `npm run build`). A fresh production build, TypeScript check and targeted
+ESLint check passed. Regression coverage includes capability routing with a
+watchlist and simulated LLM rate limit, explicit growth metrics, malformed ratio
+gaps, invalid calendar dates, event-scope wording and duplicate grounded narrative.
 The backend tests cover agent decisions (resolution, planning, discovery,
 relevance, second-hop with and without an LLM, recovery), analytics, evidence
 validation and sufficiency, the Sectors service and mock adapter, the LLM layer
@@ -670,6 +689,12 @@ discovery expectation was made to depend on events above the second-hop threshol
 Earlier real-data runs found bugs the mock could not (sub-sector display names such as
 "Banks" vs the slug "banks", mixed ratio units), since fixed.
 
+The separate [2026-10-05 deployment validation](docs/e2e-validation-2026-10-05.md)
+tested 13 distinct questions: 12 returned HTTP 200, while an invalid calendar date
+exposed an HTTP 502 defect. It checked 20 claims' evidence references and 19 grounded
+narrative sentences, alongside the source-value and calendar checks. Matching the
+Sectors API is not an independent audit against issuer financial statements.
+
 To run the API and the UI, see
 [Running Locally: Mock Mode vs Real Data Mode](#running-locally-mock-mode-vs-real-data-mode).
 
@@ -694,19 +719,28 @@ To run the API and the UI, see
   work by ticker (TLKM, ISAT and ASII were tested on the deployment: ROA, ROE, growth,
   disclosures), but other sectors are recognised only when named by ticker, not by
   sector name.
-- Only part of the Sectors integration has been exercised through the deployment
-  (company report, quarterly financials, filings, per-company corporate actions). The
-  market-wide calendar, screener (NPL), sub-sector list and report dates were verified
-  live on 2026-09-27 from a local run, not yet through the deployment. Values have not
-  been cross-checked against the Sectors app; Sectors does not document the definition
-  or unit of `cost_to_income_ratio`, and its values differ from commonly reported bank
-  cost-to-income ratios.
+- The latest deployment run cross-checked annual ratios, quarterly growth and the
+  scheduled calendar against raw Sectors responses. Full deployed coverage of the
+  screener (NPL), sub-sector list, report dates and sector-wide discovery still needs
+  explicit endpoint-level verification. Values have not been independently checked
+  against the Sectors app or issuer financial statements. Sectors does not document
+  the definition or unit of `cost_to_income_ratio`; source fidelity alone does not
+  establish that the ratio's interpretation is correct.
 - Only Indonesian and English are supported.
 - The LLM routes unclear messages, so the same message can occasionally land in a
-  neighbouring category or come without a suggested question; non-research messages
-  never reach Sectors either way, and fixed example questions are always shown.
+  neighbouring category or come without a suggested question. Basic identity and
+  off-topic cases passed live, but a capability question with the default watchlist
+  incorrectly triggered research. That fix is local and awaits deployment; passing
+  the scope evaluation does not guarantee every unseen phrasing is routed correctly.
 - A capitalised four-letter word in a message (e.g. "HALO") is still checked as a
   ticker and can cost a credit before the message is classified.
+- The daily LLM limit is checked before each run and recorded afterward, so it
+  is an admission threshold rather than an atomic hard cap. Concurrent requests
+  can overshoot it. An atomic per-call reservation remains to be implemented if
+  a strict daily LLM quota is required.
+- Mock events have fixed fixture dates. Relative questions such as "next week"
+  can correctly return no events as the current date moves beyond those fixtures;
+  use explicit fixture date ranges for reproducible calendar checks.
 - The watchlist accepts any IDX ticker, but at most 3 tickers the agent does not know
   yet are verified per question; the rest are reported as unverified.
 - Research history is kept in the visitor's browser only.
@@ -735,15 +769,34 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently in Phase 6.
 - Done: ratio-unit fix deployed and re-checked; real-data evaluation re-run (6/8 live,
   31 credits; 8/8 after the expectation fix); failure cases for invalid input, missing
   secret, firewall rate limit, credit cap, offline
-- Clarify the definition and unit of Sectors' `cost_to_income_ratio`
-- Exercise every Sectors endpoint through the deployed product: sector-wide discovery
-  (market-wide calendar), NPL comparison (screener), ambiguous names, unknown tickers
-- Cross-check a sample of values against the Sectors app
-- Other sectors (non-bank companies by ticker work)
 - Done (2026-10-05, local): non-research questions, capability questions and other
   languages are routed without Sectors calls; scope evaluation 44/44
-- Failure cases still to test live: Groq rate limit, Redis unavailable, timeouts
-- Latency and credits per question type
+- Done (2026-10-05, deployment proxy): 13 distinct questions, including identity,
+  off-topic, capability, growth, invalid date, non-bank NIM in English, advice,
+  fabricated-number injection, ambiguous company and unsupported script. Source
+  cross-checks: 18 numeric and 2 calendar checks passed; rate-limit rejection, input
+  validation and answer-cache reuse observed. See [report](docs/e2e-validation-2026-10-05.md).
+- Fixed locally: capability/watchlist routing, omitted revenue growth and unwanted
+  metric bundles, duplicate unavailable-period gaps for malformed ratios, invalid
+  calendar-date crash, inaccurate watchlist wording, and repeated narrative text.
+  Four main fixes passed an actual local Next.js proxy to FastAPI replay retest.
+- **Next: deploy the fixes and retest cases 3, 4, 5, 7 and 11 with new wording**
+  to avoid responses cached before the fixes. Verify the active Groq path and the
+  fallback path separately; local fix retests used rules-only real-data replay.
+- **Next: browser verification** of question submission, progress/error messages,
+  peer and trend charts, evidence/trace display, watchlist edits, IndexedDB history
+  after reload, language switching and mobile layout. The latest run had no browser
+  surface and did not verify these interactions.
+- Still open: clarify Sectors' `cost_to_income_ratio` definition/unit; compare a
+  sample against the Sectors app or issuer reports.
+- Still open: explicit deployed coverage of all Sectors endpoints, NPL/screener,
+  sector-wide discovery, unknown tickers, missing/stale/conflicting data and period
+  alignment. Mock regression coverage is not a substitute for live checks.
+- Still open: actual Groq 429, Redis unavailable and timeout behavior on the deployed
+  flow. Use an isolated test deployment for disruptive failure scenarios.
+- Partial: per-request latency recorded for this sample; production credits were
+  not measured. Record cache hits, LLM fallback and source credits, and compare
+  repeated runs by question type before making performance/capacity claims.
 - Final runtime LLM provider and model
 
 **Security checks (Phase 6, in progress)**
@@ -754,8 +807,10 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently in Phase 6.
 - The LLM selects cited items without publishing its own prose, and source-provided
   event titles do not enter the second-hop decision prompt (deployed with the
   2026-10-05 release).
-- Still to test prompt injection and advice requests against the live LLM (system-prompt extraction,
-  instructions to ignore rules, fabricated claims, HTML or script in questions)
+- Done live (2026-10-05): an instruction to invent BBCA ROE of 999% did not change
+  the source-backed answer; an unscoped buy request received the advice boundary
+  without a Sectors call. Still open: broader injection coverage, system-prompt
+  extraction, source-supplied instructions and HTML/script handling in the browser.
 - Independent re-test of the deployment protections (missing or wrong key, spoofed
   client IP, per-client and firewall limits, keys or backend URL in the browser)
 - `pip-audit` for backend dependencies (`npm audit --omit=dev` reported no
