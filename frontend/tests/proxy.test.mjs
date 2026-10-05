@@ -27,6 +27,15 @@ test("blocks cross-origin browser requests to the paid agent endpoint", () => {
   assert.equal(sameOriginRequest(new Request(url, { headers: { "sec-fetch-site": "same-site" } })), false);
 });
 
+test("accepts the host the page was opened on when the dev server reports localhost", () => {
+  const url = "http://localhost:3000/api/agent/query";
+  const local = (origin, host) => new Request(url, { headers: { origin, host, "sec-fetch-site": "same-origin" } });
+  assert.equal(sameOriginRequest(local("http://127.0.0.1:3000", "127.0.0.1:3000")), true);
+  assert.equal(sameOriginRequest(local("http://localhost:3000", "localhost:3000")), true);
+  assert.equal(sameOriginRequest(local("http://attacker.example", "127.0.0.1:3000")), false);
+  assert.equal(sameOriginRequest(local("https://127.0.0.1:3000", "127.0.0.1:3000")), false);
+});
+
 test("caps JSON request bytes even without a Content-Length header", async () => {
   const url = "https://idx-insight.example/api/agent/query";
   const small = new Request(url, { method: "POST", body: JSON.stringify({ query: "Bandingkan BBCA dan BBRI" }) });
