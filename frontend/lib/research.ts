@@ -34,6 +34,7 @@ export function tickersIn(query: string, watchlist: string[] = []): string[] {
 
 const SECTOR = /\b(sektor|sector|perbankan|banking|banks|bank-bank)\b/i;
 const WATCHLIST_WORD = /\b(watchlist|daftar pantau(an)?|pantauan saya|my list)\b/i;
+const CAPABILITY = /\b((kamu|lu|lo|anda|kau)\s+(bisa|dapat|mampu|sanggup)|can\s+you|are\s+you\s+able|do\s+you\s+(support|cover|know)|cara\s+(pakai|menggunakan)|how\s+(do\s+i|to)\s+use)\b/i;
 
 // Words that make a question without tickers a research question about the watchlist.
 const RESEARCH_WORD = /\b(disclosure|keterbukaan|pantau|memantau|monitor|peristiwa|agenda|jadwal|aksi korporasi|corporate action|rups|agm|dividen|dividend|filing|pengumuman|announcement|upcoming|bandingkan|perbandingan|membandingkan|compare|comparison|kinerja|performa|performance|laba|earnings|profitab\w*|efisiensi|efficiency|rasio|ratio|metrik|metric|roe|roa|nim|npl|ldr|car|casa|pertumbuhan|growth)\b/i;
@@ -45,6 +46,7 @@ const RESEARCH_WORD = /\b(disclosure|keterbukaan|pantau|memantau|monitor|peristi
  */
 export function watchlistForQuery(query: string, watchlist: string[]): string[] {
   if (tickersIn(query, watchlist).length) return [];
+  if (CAPABILITY.test(query)) return [];
   if (WATCHLIST_WORD.test(query)) return watchlist;
   if (SECTOR.test(query)) return [];
   return RESEARCH_WORD.test(query) ? watchlist : [];
@@ -56,6 +58,7 @@ const PEER = /\b(bandingkan|perbandingan|membandingkan|compare|comparison|versus
 /** Preview of the research type the backend's rules would pick (mirrors `agent/intent.py`). */
 export function guessIntent(query: string, watchlist: string[]): ResultView | null {
   if (query.trim().length < 3) return null;
+  if (CAPABILITY.test(query) && !tickersIn(query, watchlist).length) return null;
   const scoped = watchlistForQuery(query, watchlist);
   const companies = tickersIn(query, watchlist).length || scoped.length;
   const sector = SECTOR.test(query);

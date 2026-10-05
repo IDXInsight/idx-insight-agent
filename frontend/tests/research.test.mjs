@@ -34,6 +34,15 @@ test("previews the research type the backend rules would pick", () => {
   assert.equal(guessIntent("ab", banks), null);
 });
 
+test("capability questions do not turn the default watchlist into a research request", () => {
+  for (const query of ["Kamu bisa membandingkan ROE?", "Can you compare ROE?", "Kamu bisa pantau disclosure di watchlist saya?"]) {
+    assert.deepEqual(watchlistForQuery(query, banks), []);
+    assert.equal(guessIntent(query, banks), null);
+  }
+  assert.deepEqual(watchlistForQuery("Bandingkan ROE bank di watchlist saya", banks), banks);
+  assert.equal(guessIntent("Can you compare BBCA and BBRI on ROE?", banks), "peers");
+});
+
 test("parses ticker input and reports invalid tokens", () => {
   assert.deepEqual(parseTickers("tlkm, ASII bbca.jk TLKM"), { tickers: ["TLKM", "ASII", "BBCA"], invalid: [] });
   assert.deepEqual(parseTickers("BBC, CASA, ok12"), { tickers: [], invalid: ["BBC", "CASA", "ok12"] });
