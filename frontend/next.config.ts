@@ -36,6 +36,8 @@ const nextConfig: NextConfig = {
     turbopackFileSystemCacheForBuild: false,
   },
   poweredByHeader: false,
+  // `next dev` serves its own resources to localhost only; also allow the page on 127.0.0.1.
+  allowedDevOrigins: ["127.0.0.1"],
   // One landing page with sections; the short URL points at its glossary section.
   async redirects() {
     return [{ source: "/glosarium", destination: "/#glosarium", permanent: false }];

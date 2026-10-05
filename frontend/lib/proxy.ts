@@ -37,7 +37,11 @@ export function sameOriginRequest(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return true; // Non-browser clients do not set Origin.
   try {
-    return new URL(origin).origin === new URL(request.url).origin;
+    // Compare with the Host the browser addressed: `next dev` reports `request.url` as
+    // localhost even when the page was opened on 127.0.0.1. Browsers cannot forge Host.
+    const own = new URL(request.url);
+    const host = request.headers.get("host") ?? own.host;
+    return new URL(origin).origin === new URL(`${own.protocol}//${host}`).origin;
   } catch {
     return false;
   }
