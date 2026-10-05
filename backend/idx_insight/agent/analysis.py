@@ -58,7 +58,7 @@ def peer_comparison(state: AgentState, ctx: FinancialContext, symbols: list[str]
         series = {sym: _series(ctx, sym, metric, requested) for sym in symbols}
         if requested:
             for sym, vals in series.items():
-                if not vals:
+                if not vals and not ctx.has_malformed_metric(sym, metric):
                     state.add_gap("unavailable_period", t(lang, "gap.unavailable_period", label=label,
                                                           sym=sym, period=quarter_label(requested)),
                                   sym)

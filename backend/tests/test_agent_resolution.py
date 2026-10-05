@@ -185,6 +185,32 @@ def test_provider_error_falls_back_to_rules():
     assert llm.state.llm_calls[0].status == "rate_limit"
 
 
+@pytest.mark.parametrize("query", ["Kamu bisa membandingkan ROE?", "Can you compare ROE?",
+                                  "Kamu bisa pantau disclosure di watchlist saya?"])
+def test_capability_with_watchlist_stays_about_on_rate_limit(query, run):
+    state = run(query, watchlist=["BBCA", "BBRI", "BMRI", "BBNI"],
+                llm=MockLLMProvider({"intent": LLMRateLimitError("quota reached")}))
+    assert state.intent.name == "about"
+    assert state.tool_calls == []
+    assert not state.claims
+
+
+@pytest.mark.parametrize("query", [
+    "Bandingkan pertumbuhan laba dan pendapatan BBCA dan BBRI pada Q2 2026",
+    "Compare earnings and revenue growth of BBCA and BBRI in Q2 2026",
+])
+def test_explicit_growth_metrics_do_not_add_unrequested_bundles(query, run):
+    state = run(query)
+    assert requested_metrics(state.intent) == ["earnings_growth_yoy", "revenue_growth_yoy"]
+    assert set(state.analytics["peer_comparison"]) == {"earnings_growth_yoy", "revenue_growth_yoy"}
+
+
+def test_named_company_polite_research_request_is_preserved(run):
+    state = run("Can you compare BBCA and BBRI on ROE?")
+    assert state.intent.name == "peer_comparison"
+    assert state.analytics["peer_comparison"]["roe"]["sufficient"]
+
+
 class _CreditCappedAdapter(MockSectorsAdapter):
     """Every Sectors call is refused by the credit cap before it is sent."""
 

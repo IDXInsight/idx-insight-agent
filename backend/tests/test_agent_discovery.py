@@ -6,6 +6,17 @@ from idx_insight.sectors import MockSectorsAdapter
 DISCOVERY_Q = "Apa saja disclosure yang perlu saya pantau minggu depan untuk sektor perbankan?"
 
 
+def test_named_company_reason_does_not_claim_it_is_on_the_watchlist(run):
+    named = run("Disclosure BBNI minggu depan, daftar saja")
+    assert any("disebut dalam pertanyaan" in reason
+               for ev in named.relevant_events for reason in ev.relevance_reasons)
+    assert not any("watchlist" in reason
+                   for ev in named.relevant_events for reason in ev.relevance_reasons)
+    watched = run("Disclosure minggu depan, daftar saja", watchlist=["BBNI"])
+    assert any("watchlist" in reason
+               for ev in watched.relevant_events for reason in ev.relevance_reasons)
+
+
 def test_discovery_finds_relevant_events_in_scope_and_window(run):
     state = run(DISCOVERY_Q)
     assert state.intent.name == "discovery"

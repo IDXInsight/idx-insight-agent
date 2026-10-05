@@ -69,7 +69,9 @@ def rank_events(state: AgentState, events: list[Event]) -> list[Event]:
     scored = []
     for ev in unique:
         score, reasons = score_event(ev, ctx)
-        rendered = [render_reason(state, code, params) for code, params in reasons]
+        rendered = [render_reason(state,
+                                  "query_scope" if code == "watchlist" and ev.symbol not in state.watchlist
+                                  else code, params) for code, params in reasons]
         scored.append(ev.model_copy(update={"relevance_score": score,
                                             "relevance_reasons": rendered}))
     state.discovered_events = scored

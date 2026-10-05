@@ -41,6 +41,12 @@ def test_ratio_series_with_mixed_units_is_left_out(run, monkeypatch):
     assert not [g for g in state.data_gaps if g.kind == "missing_metric" and g.symbol == "BBRI"]
     assert comparison(state, "roe")["values"]["BBRI"] == pytest.approx(0.180)
 
+    requested = run("Bandingkan cost to income BBCA dan BBRI tahun 2025")
+    assert "BBRI" not in comparison(requested, "cost_to_income_ratio")["values"]
+    assert [g for g in requested.data_gaps if g.kind == "malformed_data" and g.symbol == "BBRI"]
+    assert not [g for g in requested.data_gaps
+                if g.kind in ("missing_metric", "unavailable_period") and g.symbol == "BBRI"]
+
 
 def test_contradictory_growth_is_held_back(run):
     state = run(PEER_Q)

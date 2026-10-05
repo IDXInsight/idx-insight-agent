@@ -64,13 +64,27 @@ _METRIC_WORDS: dict[str, str] = {
 
 
 def _metrics(text: str) -> tuple[list[str], list[str], list[str]]:
+    growth_metrics = []
+    bundle_text = text
+    if re.search(r"\b(pertumbuhan|growth)\b", text):
+        for words, metric in (
+            (r"laba|earnings|profit", "earnings_growth_yoy"),
+            (r"pendapatan|revenue", "revenue_growth_yoy"),
+            (r"nii", "nii_growth_yoy"),
+            (r"kredit|loans?", "loan_growth_yoy"),
+        ):
+            if re.search(rf"\b({words})\b", text):
+                growth_metrics.append(metric)
+        if growth_metrics:
+            # Named growth metrics must not expand into the whole growth/profitability bundle.
+            bundle_text = re.sub(r"\b(pertumbuhan|growth|laba|earnings)\b", " ", text)
     # Keep the order in which the user mentioned them.
-    hits = sorted((text.find(word), b) for word, b in _BUNDLE_WORDS.items() if word in text)
+    hits = sorted((bundle_text.find(word), b) for word, b in _BUNDLE_WORDS.items() if word in bundle_text)
     bundles = list(dict.fromkeys(b for _, b in hits))
     metrics = [m for word, m in _METRIC_WORDS.items() if re.search(rf"\b{re.escape(word)}\b", text)]
     unsupported = [label for word, label in KNOWN_UNSUPPORTED.items()
                    if re.search(rf"\b{word}\b", text)]
-    return bundles, list(dict.fromkeys(metrics)), unsupported
+    return bundles, list(dict.fromkeys(metrics + growth_metrics)), unsupported
 
 
 def rule_intent(query: str, entities: Entities) -> Intent:
@@ -88,7 +102,9 @@ def rule_intent(query: str, entities: Entities) -> Intent:
     scoped = bool(n_companies or entities.sub_sector)
     # About / advice phrases are only hints for the LLM, which decides unscoped messages;
     # without an LLM (or when it fails) the rule result stands.
-    if _ABOUT.search(text) and not scoped:
+    named_company = any(re.search(rf"\b{re.escape(c.matched_text.lower())}\b", text)
+                        for c in entities.companies)
+    if _ABOUT.search(text) and not named_company and not entities.ambiguous:
         return Intent(name="about", confidence="low", **common)
     if _PEER.search(text) and (n_companies >= 2 or entities.sub_sector):
         return Intent(name="peer_comparison", confidence="high", **common)

@@ -72,6 +72,7 @@ def validate_narrative(proposal: NarrativeProposal,
     if len(proposal.sentences) > MAX_SENTENCES:
         return None, f"too many sentences ({len(proposal.sentences)})"
     out = []
+    seen_text: set[str] = set()
     for i, sentence in enumerate(proposal.sentences, 1):
         text = sentence.text.strip()
         if not text or len(text) > MAX_SENTENCE_CHARS:
@@ -92,7 +93,9 @@ def validate_narrative(proposal: NarrativeProposal,
         grounded_text = " ".join(items[c] for c in citations)
         if len(grounded_text) > MAX_SENTENCE_CHARS:
             return None, f"sentence {i}: cited source text too long"
-        out.append(CitedSentence(text=grounded_text, citations=citations))
+        if grounded_text not in seen_text:
+            out.append(CitedSentence(text=grounded_text, citations=citations))
+            seen_text.add(grounded_text)
     return out, None
 
 

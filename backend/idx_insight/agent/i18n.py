@@ -11,6 +11,11 @@ from __future__ import annotations
 from idx_insight.agent.language import Language
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "reply.invalid_dates": {
+        "id": "Tanggal yang diminta tidak valid. Gunakan tanggal kalender yang benar dalam format "
+              "YYYY-MM-DD, atau sebutkan periode seperti minggu depan.",
+        "en": "The requested dates are invalid. Use valid calendar dates in YYYY-MM-DD format, "
+              "or specify a period such as next week."},
     # --- relevance reasons (codes come from analytics.events) --------------------
     "reason.ownership_large": {
         "id": "Perubahan kepemilikan {pct} dari total saham (≥1%)",
@@ -39,6 +44,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "id": "Beberapa peristiwa emiten yang sama berdekatan",
         "en": "Several events for the same company close together"},
     "reason.watchlist": {"id": "Emiten ada di watchlist", "en": "Company is on the watchlist"},
+    "reason.query_scope": {"id": "Emiten disebut dalam pertanyaan", "en": "Company is named in the question"},
 
     # --- event titles -----------------------------------------------------------------
     "event.holder_default": {"id": "Pemegang saham", "en": "A shareholder"},

@@ -38,7 +38,7 @@ from idx_insight.agent.planner import build_plan
 from idx_insight.agent.relevance import decide_second_hop, rank_events
 from idx_insight.agent.state import AgentState, Briefing, Intent, RecoveryAction
 from idx_insight.agent.synthesis import synthesize
-from idx_insight.agent.timeframe import resolve_timeframe
+from idx_insight.agent.timeframe import InvalidTimeframeError, resolve_timeframe
 from idx_insight.agent.validator import EvidenceValidator
 from idx_insight.config import Settings
 from idx_insight.llm.base import LLMProvider
@@ -259,7 +259,18 @@ class InsightAgent:
                                       clarification_question=reply)
             state.add_trace("Unsupported language", reply, "warning")
             return state
-        run.resolve()
+        try:
+            run.resolve()
+        except InvalidTimeframeError:
+            reply = t(state.language, "reply.invalid_dates")
+            state.intent = Intent(name="clarify", confidence="high")
+            state.status = "needs_clarification"
+            state.briefing = Briefing(title=t(state.language, "clarification.title"), summary=reply,
+                                      boundary_note=t(state.language, "briefing.boundary"),
+                                      clarification_question=reply)
+            state.add_trace("Invalid timeframe", reply, "warning")
+            state.tool_calls = list(run.service.calls)
+            return state
 
         question = run.clarification()
         if question:

@@ -28,6 +28,10 @@ _YEAR = re.compile(r"\b(?:tahun|year|fy)\s*(20\d{2})\b")
 _QUARTER_END = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
 
 
+class InvalidTimeframeError(ValueError):
+    """A date explicitly supplied by the user is not a calendar date."""
+
+
 def _week_bounds(day: date) -> tuple[date, date]:
     monday = day - timedelta(days=day.weekday())
     return monday, monday + timedelta(days=6)
@@ -51,7 +55,10 @@ def resolve_timeframe(query: str, as_of: date, intent: str, lang: Language = "id
     kw = {"financial_period": period}
 
     if m := _ISO_RANGE.search(text):
-        start, end = date.fromisoformat(m.group(1)), date.fromisoformat(m.group(2))
+        try:
+            start, end = date.fromisoformat(m.group(1)), date.fromisoformat(m.group(2))
+        except ValueError as exc:
+            raise InvalidTimeframeError("invalid date range") from exc
         if start > end:
             start, end = end, start
         if start > as_of:

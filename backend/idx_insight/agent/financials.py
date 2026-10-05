@@ -133,6 +133,9 @@ class FinancialContext:
 
     # -- metrics ---------------------------------------------------------------
 
+    def has_malformed_metric(self, symbol: str, metric: str) -> bool:
+        return (symbol, metric) in self._mixed_units
+
     def metric_values(self, symbol: str, metric: str) -> list[MetricValue]:
         data = self._data(symbol)
         if metric in data.values:

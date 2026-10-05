@@ -80,6 +80,15 @@ def test_clarification_response(client):
     assert body["tool_calls"] == []
 
 
+def test_invalid_calendar_date_gets_clarification_instead_of_server_error(client):
+    response = post(client, "Disclosure BBCA 2026-02-30 sampai 2026-03-01")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "needs_clarification"
+    assert "tidak valid" in body["briefing"]["summary"]
+    assert body["events"] == [] and body["tool_calls"] == []
+
+
 def test_watchlist_is_validated(client):
     assert post(client, DISCOVERY_Q, watchlist=["BBRI.JK"]).status_code == 200
     assert post(client, DISCOVERY_Q, watchlist=["NOT-A-TICKER"]).status_code == 422
