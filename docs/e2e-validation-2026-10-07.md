@@ -40,8 +40,8 @@ The per-client limit (5 agent runs per 10 minutes) answered the sixth run with
 HTTP 429, and the UI showed the "too many questions" message.
 
 Sectors usage: at most 28 tool calls for the whole run (an upper bound, since calls
-served from the shared Sectors cache cost nothing). Exact spend comes from the Redis
-ledger or the Sectors dashboard.
+served from the shared Sectors cache cost nothing). After the run the Sectors dashboard
+showed 730 of 1,000 credits left.
 
 ## Browser checks (production, desktop)
 
@@ -75,7 +75,7 @@ Fixed: the label stays on one centred line with smaller tracking on narrow scree
 | `npm audit --omit=dev` (frontend) | 1 high: `source-map-js` 1.2.1 (GHSA-68fv-2mgg-jv7q, DoS on crafted source maps) via `postcss`/`@tailwindcss` at build time only; no runtime exposure, not changed before the deadline |
 | Git history secret scan (all branches, key patterns, `.env`/`.pem` files) | No real key pattern and no secret file ever committed. One line `GROQ_API_KEY=gsk-…` matched a loose pattern; real Groq keys start with `gsk_`, and the team confirmed it is a placeholder (`.env.example` carries no key) |
 | GitHub secret scanning and push protection | Were disabled; enabled on 2026-10-07 through the GitHub API. No open secret-scanning alerts |
-| Vercel runtime logs | Not reviewed (no Vercel CLI access from this machine); a team member with dashboard access should scan the last week for keys |
+| Vercel runtime logs | Reviewed by the team in the Vercel dashboard: no secrets in `idx-insight` or `idx-insight-api` logs |
 
 Prompt injection (local, mock data, live Groq):
 

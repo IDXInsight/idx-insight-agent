@@ -21,11 +21,9 @@ first for an unknown ticker-like word; see [Known Limitations](#known-limitation
 and [Data Freshness and Caching](#data-freshness-and-caching).
 
 Overall: the product works end to end on real data and is deployed; validation and
-security testing are done; submission materials have not started. The previously
-documented spend was about 152 of 1,000 Sectors credits through 2026-10-02, plus 7
-local credits on 2026-10-05 and at most 28 tool calls on 2026-10-07; production spend
-in between was not measured. Reconcile the local and Redis ledgers with the Sectors
-dashboard before reporting the remaining budget.
+security testing are done; submission materials have not started. Sectors credits:
+730 of 1,000 left on the Sectors dashboard on 2026-10-07 (270 spent on development,
+validation and the deployment so far), well above the 200 reserved for judging.
 
 **Latest validation (2026-10-07):** the 5 October fixes pass in production; screener
 NPL, unknown ticker, company name and non-bank sector discovery checked live; a real
@@ -46,7 +44,7 @@ done. One UI defect found and fixed (evidence for computed values). See the
 | Frontend (Next.js) | Implemented; refinement ongoing | Bilingual landing page with a sticky section menu and banking glossary; watchlist; full per-browser history; peer small multiples and evidence-backed trend line; replies for non-research questions; a context-aware follow-up per result; reorderable widgets; evidence explorer and agent trace (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
-| Security testing | Done (log review open) | Deployment protections re-tested live; prompt injection (system-prompt extraction, fake role blocks, injected buy text) fails; Redis outage fails closed; `pip-audit` clean; `npm audit` one build-time-only finding; Git history scan clean. GitHub secret scanning and push protection enabled. Open: review Vercel runtime logs |
+| Security testing | Done | Deployment protections re-tested live; prompt injection (system-prompt extraction, fake role blocks, injected buy text) fails; Redis outage fails closed; `pip-audit` clean; `npm audit` one build-time-only finding; Git history scan clean. GitHub secret scanning and push protection enabled; Vercel runtime logs reviewed, no secrets |
 | End-to-end validation (Phase 6) | Done (mobile check open) | Real-data runs, scope evaluation 44/44, 5 Oct cross-checks and 7 Oct post-deployment retests, endpoint coverage and desktop browser checks. See [latest report](docs/e2e-validation-2026-10-07.md) |
 | Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
@@ -787,8 +785,8 @@ Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submiss
 - Done (2026-10-07): mobile landing checked at 375 px; the hero "RESEARCH AGENT"
   label now stays on one centred line
 - Done (2026-10-07): the `frontend` fixes merged to `main` and deployed
-- Open (team): reconcile Sectors spend with the dashboard and keep the
-  judging-period reserve (see Phase 7)
+- Done (2026-10-07): Sectors dashboard shows 730 of 1,000 credits left; keep at least
+  200 for the judging period (see Phase 7)
 - Not tested live by design: timeouts and a Redis outage on the production deployment
   (disruptive); a Redis outage fails closed locally (HTTP 503)
 
@@ -809,8 +807,10 @@ Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submiss
   committed key or secret file
 - Done (2026-10-07): GitHub secret scanning and push protection enabled on the
   repository; no open secret-scanning alerts
-- Open (Vercel admin): review the Vercel runtime logs of the last week for secrets. The single `GROQ_API_KEY=gsk-…` match in Git history was
-  confirmed by the team as a placeholder (`.env.example` has no key)
+- Done (2026-10-07): Vercel runtime logs reviewed by the team; no secrets in the
+  frontend (`idx-insight`) or backend (`idx-insight-api`) logs. The single
+  `GROQ_API_KEY=gsk-…` match in Git history was confirmed by the team as a placeholder
+  (`.env.example` has no key)
 
 **Demo and submission (Phase 7, not started)**
 - One-sentence problem statement; one-minute teaser; judging video of up to three

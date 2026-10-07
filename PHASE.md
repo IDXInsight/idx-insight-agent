@@ -296,7 +296,7 @@ User
 Phases 4 and 5.
 
 ### Status (updated 2026-10-07)
-Done; the remaining items need a team member with repository or Vercel admin access.
+Done.
 Recorded in `docs/e2e-validation.md`:
 
 - Runs 1–3 (2026-10-02, real data, local and deployed): 11 questions including
@@ -325,9 +325,9 @@ Recorded in `docs/e2e-validation.md`:
 - Runtime LLM for the submission: Groq `openai/gpt-oss-120b`, unless the team decides
   otherwise.
 
-Open (team):
-- review the Vercel runtime logs for secrets
-- reconcile Sectors spend with the dashboard and keep the judging-period reserve
+- Team checks (2026-10-07): Vercel runtime logs of both projects contain no secrets;
+  the Sectors dashboard shows 730 of 1,000 credits left (270 spent), so the
+  judging-period reserve of at least 200 is covered.
 
 ---
 
