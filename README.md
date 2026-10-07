@@ -786,7 +786,8 @@ Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submiss
   verified on every path), unless the team decides otherwise
 - Done (2026-10-07): mobile landing checked at 375 px; the hero "RESEARCH AGENT"
   label now stays on one centred line
-- Open (team): merge the `frontend` fixes to `main`; reconcile Sectors spend with the dashboard and keep the
+- Done (2026-10-07): the `frontend` fixes merged to `main` and deployed
+- Open (team): reconcile Sectors spend with the dashboard and keep the
   judging-period reserve (see Phase 7)
 - Not tested live by design: timeouts and a Redis outage on the production deployment
   (disruptive); a Redis outage fails closed locally (HTTP 503)

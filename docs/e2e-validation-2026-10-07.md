@@ -55,7 +55,7 @@ rate-limit message.
 (YoY growth, screener NPL; claim kind `calculation`) opened no evidence drawer from the
 metric table or the bar chart, and were repeated in the findings list. Reported values
 (ROE etc.) worked. Fixed and checked locally in the browser (both table and bar open
-the evidence explorer); needs a merge to `main` to reach production.
+the evidence explorer); merged to `main` and deployed on 7 October.
 
 Mobile: checked by the team and with 375 px device emulation; the hero's
 "RESEARCH AGENT" label wrapped onto two left-aligned lines inside the small circle.
@@ -105,6 +105,7 @@ field as its evidence, and excludes a company whose series mixes units (BBRI: 1.
 - `eed1ac0` (merged to `main` 5 Oct): the proxy compares `Origin` with the request
   `Host`, so a local page on `127.0.0.1:3000` is no longer rejected as
   `invalid_request`; `allowedDevOrigins` lets `next dev` serve that host.
-- `872cab1` (`frontend`): evidence for computed peer values.
+- `872cab1` (merged to `main` 7 Oct): evidence for computed peer values.
+- `9a0fc94` (merged to `main` 7 Oct): the hero "RESEARCH AGENT" label stays on one line on phones.
 
 Validation: 342 backend tests and Ruff; 29 frontend tests, TypeScript and ESLint.

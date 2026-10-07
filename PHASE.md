@@ -259,7 +259,8 @@ Next.js UI and inspect evidence and the execution trace.
   charts and an evidence-backed trend line when multiple periods exist. Overview,
   Disclosure, Peer lens and Company context widgets can be reordered and reset.
 - The 5 October fixes were deployed from `main` and retested in production on
-  2026-10-07; one later UI fix (evidence for computed values) is on `frontend`.
+  2026-10-07; the later UI fixes (evidence for computed values, mobile hero label)
+  were merged and deployed the same day.
 
 ---
 
@@ -316,7 +317,7 @@ Recorded in `docs/e2e-validation.md`:
   after deployment; screener NPL, unknown ticker, company name and non-bank sector
   discovery exercise 7 of the 9 allowlisted Sectors tools; a real Groq 429 fell back to the rules;
   desktop browser checks passed and found one defect (evidence for computed values),
-  fixed on `frontend`. Security: deployment protections re-tested, prompt injection
+  fixed and deployed. Security: deployment protections re-tested, prompt injection
   (system-prompt extraction, role blocks, injected buy text, jailbreak) failed, Redis
   outage fails closed, `pip-audit` clean, `npm audit` one build-time-only finding,
   Git history secret scan clean. `cost_to_income_ratio` is undocumented upstream and
@@ -325,7 +326,6 @@ Recorded in `docs/e2e-validation.md`:
   otherwise.
 
 Open (team):
-- merge the `frontend` evidence fix into `main`
 - review the Vercel runtime logs for secrets
 - reconcile Sectors spend with the dashboard and keep the judging-period reserve
 
