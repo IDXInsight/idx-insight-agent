@@ -8,8 +8,8 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 
 ## Current Status
 
-**Phases 0–5 implemented; Phase 6 (end-to-end validation) is complete apart from the
-team actions listed under [Remaining Work](#remaining-work); Phase 7 (submission) is next.** The
+**Phases 0–6 are done (implementation, deployment, end-to-end validation and security
+checks); Phase 7 (demo and submission) is in progress.** The
 deployed workspace uses real Sectors data; mock data remains for tests and local
 development. Vercel Preview has no backend connection. See [PHASE.md](PHASE.md).
 
@@ -21,7 +21,8 @@ first for an unknown ticker-like word; see [Known Limitations](#known-limitation
 and [Data Freshness and Caching](#data-freshness-and-caching).
 
 Overall: the product works end to end on real data and is deployed; validation and
-security testing are done; submission materials have not started. Sectors credits:
+security testing are done; the teaser video is rendered from the live product, and the
+judging video, social post and submission form are in progress. Sectors credits:
 730 of 1,000 left on the Sectors dashboard on 2026-10-07 (270 spent on development,
 validation and the deployment so far), well above the 200 reserved for judging.
 
@@ -41,12 +42,12 @@ done. One UI defect found and fixed (evidence for computed values). See the
 | Sectors data | Done | Real v2 REST adapter for the 8 endpoints the agent needs, with credit guardrails; verified live on 2026-09-27 (real-data evaluation 8/8). Fictional mock data for tests |
 | Runtime LLM | In use | Groq `openai/gpt-oss-120b` in production, verified on every LLM path, including a real 429 that fell back to the rules; deterministic rules take over without it. Gemini is supported but verified for synthesis only. Groq stays for the submission unless the team decides otherwise |
 | Languages | Done | Indonesian and English, detected from each question; the answer and the interface follow it (the ID/EN toggle still sets the interface). Other scripts (e.g. Japanese) get a short bilingual "Indonesian and English only" reply |
-| Frontend (Next.js) | Implemented; refinement ongoing | Bilingual landing page with a sticky section menu and banking glossary; watchlist; full per-browser history; peer small multiples and evidence-backed trend line; replies for non-research questions; a context-aware follow-up per result; reorderable widgets; evidence explorer and agent trace (see [frontend/README.md](frontend/README.md)) |
+| Frontend (Next.js) | Done | Bilingual landing page with a sticky section menu and banking glossary; watchlist; full per-browser history; peer small multiples and evidence-backed trend line; replies for non-research questions; a context-aware follow-up per result; reorderable widgets; evidence explorer and agent trace (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
 | Security testing | Done | Deployment protections re-tested live; prompt injection (system-prompt extraction, fake role blocks, injected buy text) fails; Redis outage fails closed; `pip-audit` clean; `npm audit` one build-time-only finding; Git history scan clean. GitHub secret scanning and push protection enabled; Vercel runtime logs reviewed, no secrets |
-| End-to-end validation (Phase 6) | Done (mobile check open) | Real-data runs, scope evaluation 44/44, 5 Oct cross-checks and 7 Oct post-deployment retests, endpoint coverage and desktop browser checks. See [latest report](docs/e2e-validation-2026-10-07.md) |
-| Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
+| End-to-end validation (Phase 6) | Done | Real-data runs, scope evaluation 44/44, 5 Oct cross-checks and 7 Oct post-deployment retests, endpoint coverage, desktop and mobile checks, failure paths (LLM and proxy timeouts, Redis outage) induced locally. See [latest report](docs/e2e-validation-2026-10-07.md) |
+| Demo and submission (Phase 7) | In progress | Teaser (59 s) rendered from the live product; judging video, social post and submission form remain |
 
 ## Tech Stack
 
@@ -57,7 +58,7 @@ done. One UI defect found and fixed (evidence for computed values). See the
 | Analytics & validation | Deterministic Python code (no LLM arithmetic) | Implemented |
 | Data source | Sectors v2 REST API (`https://api.sectors.app/v2/`) through `SectorsService` → `SectorsAdapter` | Implemented (real + mock adapter) |
 | Runtime LLM | Provider-agnostic `LLMProvider` interface; Groq and Gemini providers over their REST APIs | Optional; see below |
-| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Recharts, GSAP, Motion, lucide-react | Implemented; refinement ongoing (`frontend/`) |
+| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Recharts, GSAP, Motion, lucide-react | Implemented (`frontend/`) |
 | Tests | pytest + ruff (backend); `node:test`, ESLint, `tsc` (frontend) | Implemented |
 | Deployment | Vercel: two projects from this repository (frontend, and the FastAPI backend as one Python function); Upstash Redis for shared state | Deployed (Hobby plan, region `iad1`) |
 
@@ -658,8 +659,9 @@ structured output, tool calls, error normalisation, configuration), dependency
 direction, bilingual output, the evaluation cases, the API contract and the deployment
 protections (shared store, Redis REST format, shared credit ledger, internal key, usage
 limits, answer cache), and adversarial prompt-injection cases. No test needs an API
-key or network access; tests never read a local `.env`. `npm audit --omit=dev`
-reported no vulnerabilities on 2026-10-05; a Python dependency audit is still pending.
+key or network access; tests never read a local `.env`. On 2026-10-07 `pip-audit`
+found no known vulnerabilities in the backend; `npm audit --omit=dev` reported one high
+finding in `source-map-js`, which is only used at build time.
 
 ### Evaluation
 
@@ -749,7 +751,8 @@ To run the API and the UI, see
 
 ## Remaining Work
 
-Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submission) is next.
+Phases are defined in [PHASE.md](PHASE.md); Phases 0–6 are done and Phase 7 (submission)
+is in progress.
 
 **Product UI (Phase 5)**
 - Done: bilingual landing page with a sticky section menu and glossary; free-ticker
@@ -758,10 +761,9 @@ Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submiss
   non-research messages; a context-aware follow-up per result; progress and error
   states; peer small multiples; evidence-backed trend line; bank logos; draggable
   widgets; offline state and mobile layout.
-- Split larger page/workspace components for easier maintenance.
-- Show when a cached answer was generated (the interface shows when the visitor asked).
-- A dedicated multi-period API series would let the trend chart cover more than
-  the historical ratio evidence already present in one research response.
+- Ideas after the hackathon (not planned before the deadline): split the larger
+  page/workspace components; show when a cached answer was generated; a dedicated
+  multi-period series so the trend chart covers more than the ratios in one response.
 
 **End-to-end validation (Phase 6, done)**
 - Done: local and deployed real-data runs (2 Oct), ratio-unit fix and real-data
@@ -776,8 +778,8 @@ Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submiss
   per-client limit and its UI message; desktop browser checks of the question box,
   language switching, history after reload, charts, metric table and trace drawer
   ([report](docs/e2e-validation-2026-10-07.md))
-- Fixed (2026-10-07, `frontend` branch): evidence drawer for computed peer values
-  (growth, NPL); local `127.0.0.1` dev access (merged)
+- Fixed and deployed (2026-10-07): evidence drawer for computed peer values
+  (growth, NPL); local `127.0.0.1` dev access
 - Closed: `cost_to_income_ratio` has no definition or unit in the Sectors docs; the
   value is shown as reported, mixed-unit series are dropped (Known Limitations)
 - Runtime LLM for the submission: Groq `openai/gpt-oss-120b` (the production model,
@@ -787,8 +789,12 @@ Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submiss
 - Done (2026-10-07): the `frontend` fixes merged to `main` and deployed
 - Done (2026-10-07): Sectors dashboard shows 730 of 1,000 credits left; keep at least
   200 for the judging period (see Phase 7)
-- Not tested live by design: timeouts and a Redis outage on the production deployment
-  (disruptive); a Redis outage fails closed locally (HTTP 503)
+- Done (2026-10-08, local): failure paths induced on a local deployment (mock data, live
+  Groq): an LLM timeout falls back to the rules plan and template synthesis and the
+  answer still completes; a proxy timeout returns HTTP 504 and the UI shows "Riset
+  memakan waktu terlalu lama"; a Redis outage fails closed (HTTP 503). These were not
+  induced on the production deployment on purpose, because that would take the live
+  site down for visitors.
 
 **Security checks (Phase 6, done)**
 - Local regression tests cover fabricated cited narrative, prompt section injection,
@@ -812,9 +818,12 @@ Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submiss
   `GROQ_API_KEY=gsk-…` match in Git history was confirmed by the team as a placeholder
   (`.env.example` has no key)
 
-**Demo and submission (Phase 7, not started)**
-- One-sentence problem statement; one-minute teaser; judging video of up to three
-  minutes recorded on the live product with real data and the LLM enabled
-- A short overview for judges at the top of this README (live link, videos, screenshots)
-- Social media post with the Sectors thumbnail template; submission form
-- Credit caps for the judging period (9–16 Oct) with at least 200 credits in reserve
+**Demo and submission (Phase 7, in progress)**
+- Done (2026-10-08): one-minute teaser rendered from the live product with real Sectors
+  data and the LLM enabled (opening, landing page, a peer-comparison question with its
+  chart, evidence and trace, and the no-advice reply)
+- Done: credit reserve for the judging period (730 of 1,000 credits left; the
+  deployment caps Sectors spend per day)
+- Open: publish the teaser; judging video of up to three minutes; one-sentence problem
+  statement; a short overview for judges at the top of this README; social media post
+  with the Sectors thumbnail template; submission form

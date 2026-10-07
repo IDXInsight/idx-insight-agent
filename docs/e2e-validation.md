@@ -3,7 +3,8 @@
 Latest run: [7 October 2026 post-deployment retests, browser and security checks](e2e-validation-2026-10-07.md).
 The five 5 October fixes pass in production; endpoint coverage (screener NPL, unknown
 ticker, company name, non-bank sector discovery), a live Groq 429 fallback, desktop
-browser checks, deployment protections, prompt injection and dependency audits.
+browser checks, deployment protections, prompt injection and dependency audits;
+failure paths (LLM and proxy timeouts, Redis outage) induced locally on 8 October.
 Previous run: [5 October 2026 deployment cross-check and fixes](e2e-validation-2026-10-05.md).
 
 Results of running the complete product (Next.js → FastAPI → Agent Brain → Sectors →

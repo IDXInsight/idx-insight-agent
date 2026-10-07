@@ -91,6 +91,17 @@ Minor finding (not fixed): uppercase four-letter words in a question (`JSON`, `B
 treated as ticker candidates, so the answer gets a "code not found in Sectors" data gap
 and status `partial`. It only affects unusual wording.
 
+## Failure paths (local, 8 October)
+
+Induced on a local deployment (mock data, live Groq), because doing so on production
+would take the live site down:
+
+| Failure | How | Result |
+|---|---|---|
+| LLM timeout | `LLM_TIMEOUT_SECONDS=0.01` | Plan and synthesis calls time out; the rules plan and template synthesis take over; status `completed` with the correct ROE values |
+| Proxy timeout | `AGENT_TIMEOUT_MS=1` | HTTP 504 `{"error":"timeout"}`; the UI shows "Riset memakan waktu terlalu lama. Coba pertanyaan yang lebih spesifik." |
+| Redis unavailable | unreachable `UPSTASH_REDIS_REST_URL` | HTTP 503 `storage_unavailable`; no unmetered run |
+
 ## Sectors `cost_to_income_ratio`
 
 The official company-report documentation lists `cost_to_income_ratio` (and NIM, CASA,

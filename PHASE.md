@@ -15,7 +15,7 @@ Future phases are documented for planning and team coordination.
 | 3 | Analytics & Validation | Implemented (mock data) |
 | 4 | Real Sectors Integration | Implemented |
 | 5 | Product UI | Implemented (deployed) |
-| 6 | End-to-End Validation | Done (team actions open, see Phase 6 → Status) |
+| 6 | End-to-End Validation | Done |
 | 7 | Demo & Submission Preparation | In progress |
 
 Hackathon: SECTORS Hackathon 2026 — Track: AI Agents & Assistants.
@@ -327,7 +327,11 @@ Recorded in `docs/e2e-validation.md`:
 
 - Team checks (2026-10-07): Vercel runtime logs of both projects contain no secrets;
   the Sectors dashboard shows 730 of 1,000 credits left (270 spent), so the
-  judging-period reserve of at least 200 is covered.
+  judging-period reserve of at least 200 is covered. Mobile layout checked at 375 px.
+- Failure paths (2026-10-08, local): LLM timeout falls back to the rules and the answer
+  completes; proxy timeout returns HTTP 504 with the "took too long" message in the UI;
+  Redis outage fails closed (HTTP 503). Deliberately not induced on production, which
+  would take the live site down.
 
 ---
 
@@ -347,9 +351,11 @@ Prepare the project for SECTORS Hackathon 2026 submission.
 - submission materials
 
 ### Submission Checklist (official requirements)
-- [ ] public repository link; the repository stays public for at least 90 days after
-      winners are announced (17 Oct 2026); all API keys removed
+- [x] public repository link; the repository stays public for at least 90 days after
+      winners are announced (17 Oct 2026); all API keys removed (Git history scanned,
+      GitHub secret scanning and push protection enabled)
 - [ ] one-minute teaser video, published publicly on YouTube or social media
+      (rendered on 2026-10-08 from the live product; to be published)
 - [ ] judging video of up to three minutes: problem, intended audience and the core
       workflow end to end (public or unlisted YouTube/Vimeo, shared Drive, or Loom)
 - [ ] one-sentence problem statement: who the product is for and what problem it solves
@@ -470,7 +476,7 @@ The project must:
 
 Phase 5 is implemented: the product is deployed on Vercel with the deployment
 protections and UI listed under Phase 5 (see Phase 5 → Progress). Phase 6 ran from
-2026-10-02 to 2026-10-07 (docs/e2e-validation.md), including live security retests;
-its open items are team actions listed under Phase 6 → Status. Phase 7 (videos,
-problem statement, social post, submission form) is in progress; submissions close
-on 8 October 2026, 23:59 WIB.
+2026-10-02 to 2026-10-08 (docs/e2e-validation.md), including live security retests,
+and is done. Phase 7 is in progress: the teaser is rendered; the judging video, problem
+statement, social post and submission form remain. Submissions close on 8 October 2026,
+23:59 WIB.
