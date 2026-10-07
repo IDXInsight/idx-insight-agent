@@ -99,7 +99,10 @@ response pipeline. All four returned HTTP 200 with the expected behavior. Local
 retests used rules-only mode; a separate mocked Groq 429 test verifies capability
 fallback. They spent no new Sectors or LLM credits. Temporary servers were stopped.
 
-**Fixes are local and have not been deployed.** After deployment, repeat cases
+*Update 2026-10-07:* the fixes were deployed from `main` (`c83e8c7`) and cases 3, 4, 5,
+7 and 11 pass in production; see [the 7 October report](e2e-validation-2026-10-07.md).
+
+**Fixes are local and have not been deployed** (as of 5 October). After deployment, repeat cases
 3, 4, 5, 7 and 11 with slightly different wording to avoid old answer-cache entries.
 Retest in a real browser to complete visual E2E verification. Redis outage, a real
 Groq quota failure, and production credit-cap exhaustion were not induced here.
