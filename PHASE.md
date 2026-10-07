@@ -326,10 +326,8 @@ Recorded in `docs/e2e-validation.md`:
 
 Open (team):
 - merge the `frontend` evidence fix into `main`
-- check the mobile layout by hand once before recording
 - enable GitHub secret scanning and push protection (disabled on the public repository)
-- review the Vercel runtime logs for secrets; confirm the single `GROQ_API_KEY=gsk-…`
-  match in Git history is a placeholder
+- review the Vercel runtime logs for secrets
 - reconcile Sectors spend with the dashboard and keep the judging-period reserve
 
 ---

@@ -784,8 +784,9 @@ Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submiss
   value is shown as reported, mixed-unit series are dropped (Known Limitations)
 - Runtime LLM for the submission: Groq `openai/gpt-oss-120b` (the production model,
   verified on every path), unless the team decides otherwise
-- Open (team): check the mobile layout by hand once before recording; merge the
-  `frontend` fix to `main`; reconcile Sectors spend with the dashboard and keep the
+- Done (2026-10-07): mobile landing checked at 375 px; the hero "RESEARCH AGENT"
+  label now stays on one centred line
+- Open (team): merge the `frontend` fixes to `main`; reconcile Sectors spend with the dashboard and keep the
   judging-period reserve (see Phase 7)
 - Not tested live by design: timeouts and a Redis outage on the production deployment
   (disruptive); a Redis outage fails closed locally (HTTP 503)
@@ -807,8 +808,8 @@ Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submiss
   committed key or secret file
 - Open (repository admin): enable GitHub secret scanning and push protection
   (currently disabled on the public repository); review the Vercel runtime logs of the
-  last week for secrets; confirm by eye that the single `GROQ_API_KEY=gsk-…` match in
-  Git history is a placeholder (real Groq keys start with `gsk_`)
+  last week for secrets. The single `GROQ_API_KEY=gsk-…` match in Git history was
+  confirmed by the team as a placeholder (`.env.example` has no key)
 
 **Demo and submission (Phase 7, not started)**
 - One-sentence problem statement; one-minute teaser; judging video of up to three

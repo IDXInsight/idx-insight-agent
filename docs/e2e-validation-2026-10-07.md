@@ -57,8 +57,9 @@ metric table or the bar chart, and were repeated in the findings list. Reported 
 (ROE etc.) worked. Fixed and checked locally in the browser (both table and bar open
 the evidence explorer); needs a merge to `main` to reach production.
 
-Not checked: mobile layout (the browser window could not be resized from automation);
-check once by hand in device mode before recording the videos.
+Mobile: checked by the team and with 375 px device emulation; the hero's
+"RESEARCH AGENT" label wrapped onto two left-aligned lines inside the small circle.
+Fixed: the label stays on one centred line with smaller tracking on narrow screens.
 
 ## Security checks
 
@@ -72,7 +73,7 @@ check once by hand in device mode before recording the videos.
 | Redis unavailable (local, unreachable Upstash URL) | Fails closed: HTTP 503 `storage_unavailable`, no unmetered run; the proxy shows "backend unavailable" |
 | `pip-audit` (backend) | No known vulnerabilities |
 | `npm audit --omit=dev` (frontend) | 1 high: `source-map-js` 1.2.1 (GHSA-68fv-2mgg-jv7q, DoS on crafted source maps) via `postcss`/`@tailwindcss` at build time only; no runtime exposure, not changed before the deadline |
-| Git history secret scan (all branches, key patterns, `.env`/`.pem` files) | No real key pattern and no secret file ever committed. One line `GROQ_API_KEY=gsk-…` matched a loose pattern; real Groq keys start with `gsk_`, so it is most likely a placeholder, but a team member should confirm it by eye |
+| Git history secret scan (all branches, key patterns, `.env`/`.pem` files) | No real key pattern and no secret file ever committed. One line `GROQ_API_KEY=gsk-…` matched a loose pattern; real Groq keys start with `gsk_`, and the team confirmed it is a placeholder (`.env.example` carries no key) |
 | GitHub secret scanning and push protection | **Disabled** on the public repository; enabling it needs a repository admin (Settings → Code security) |
 | Vercel runtime logs | Not reviewed (no Vercel CLI access from this machine); a team member with dashboard access should scan the last week for keys |
 
