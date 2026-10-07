@@ -46,7 +46,7 @@ done. One UI defect found and fixed (evidence for computed values). See the
 | Frontend (Next.js) | Implemented; refinement ongoing | Bilingual landing page with a sticky section menu and banking glossary; watchlist; full per-browser history; peer small multiples and evidence-backed trend line; replies for non-research questions; a context-aware follow-up per result; reorderable widgets; evidence explorer and agent trace (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
-| Security testing | Done (two admin actions open) | Deployment protections re-tested live; prompt injection (system-prompt extraction, fake role blocks, injected buy text) fails; Redis outage fails closed; `pip-audit` clean; `npm audit` one build-time-only finding; Git history scan clean. Open: enable GitHub secret scanning, review Vercel runtime logs |
+| Security testing | Done (log review open) | Deployment protections re-tested live; prompt injection (system-prompt extraction, fake role blocks, injected buy text) fails; Redis outage fails closed; `pip-audit` clean; `npm audit` one build-time-only finding; Git history scan clean. GitHub secret scanning and push protection enabled. Open: review Vercel runtime logs |
 | End-to-end validation (Phase 6) | Done (mobile check open) | Real-data runs, scope evaluation 44/44, 5 Oct cross-checks and 7 Oct post-deployment retests, endpoint coverage and desktop browser checks. See [latest report](docs/e2e-validation-2026-10-07.md) |
 | Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
@@ -806,9 +806,9 @@ Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submiss
   Redis outage fails closed; `pip-audit` clean; `npm audit --omit=dev` one high
   finding in build-time `source-map-js` only; Git history scan of all branches found no
   committed key or secret file
-- Open (repository admin): enable GitHub secret scanning and push protection
-  (currently disabled on the public repository); review the Vercel runtime logs of the
-  last week for secrets. The single `GROQ_API_KEY=gsk-…` match in Git history was
+- Done (2026-10-07): GitHub secret scanning and push protection enabled on the
+  repository; no open secret-scanning alerts
+- Open (Vercel admin): review the Vercel runtime logs of the last week for secrets. The single `GROQ_API_KEY=gsk-…` match in Git history was
   confirmed by the team as a placeholder (`.env.example` has no key)
 
 **Demo and submission (Phase 7, not started)**

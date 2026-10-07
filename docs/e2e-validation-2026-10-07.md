@@ -74,7 +74,7 @@ Fixed: the label stays on one centred line with smaller tracking on narrow scree
 | `pip-audit` (backend) | No known vulnerabilities |
 | `npm audit --omit=dev` (frontend) | 1 high: `source-map-js` 1.2.1 (GHSA-68fv-2mgg-jv7q, DoS on crafted source maps) via `postcss`/`@tailwindcss` at build time only; no runtime exposure, not changed before the deadline |
 | Git history secret scan (all branches, key patterns, `.env`/`.pem` files) | No real key pattern and no secret file ever committed. One line `GROQ_API_KEY=gsk-…` matched a loose pattern; real Groq keys start with `gsk_`, and the team confirmed it is a placeholder (`.env.example` carries no key) |
-| GitHub secret scanning and push protection | **Disabled** on the public repository; enabling it needs a repository admin (Settings → Code security) |
+| GitHub secret scanning and push protection | Were disabled; enabled on 2026-10-07 through the GitHub API. No open secret-scanning alerts |
 | Vercel runtime logs | Not reviewed (no Vercel CLI access from this machine); a team member with dashboard access should scan the last week for keys |
 
 Prompt injection (local, mock data, live Groq):
