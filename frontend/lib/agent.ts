@@ -41,6 +41,16 @@ export type Claim = {
   evidence_ids: string[];
 };
 
+/** A claim about one company's value: reported ("metric") or computed in code ("calculation", e.g. growth). */
+export function isValueClaim(claim: Pick<Claim, "kind">): boolean {
+  return claim.kind === "metric" || claim.kind === "calculation";
+}
+
+/** The claim behind one company's value in the peer table or chart. */
+export function claimForValue(claims: Claim[], metric: string, symbol: string): Claim | undefined {
+  return claims.find(c => isValueClaim(c) && c.metric === metric && c.symbols.length === 1 && c.symbols[0] === symbol);
+}
+
 export type PeerMetric = {
   metric: string;
   period: string | null;

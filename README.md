@@ -8,7 +8,8 @@ An AI research and discovery assistant for Indonesian-listed companies, built on
 
 ## Current Status
 
-**Phases 0–5 implemented; Phase 6 (end-to-end validation) is in progress.** The
+**Phases 0–5 implemented; Phase 6 (end-to-end validation) is complete apart from the
+team actions listed under [Remaining Work](#remaining-work); Phase 7 (submission) is next.** The
 deployed workspace uses real Sectors data; mock data remains for tests and local
 development. Vercel Preview has no backend connection. See [PHASE.md](PHASE.md).
 
@@ -19,19 +20,20 @@ cacheable questions can be answered from a fresh cache. Ordinary non-research me
 first for an unknown ticker-like word; see [Known Limitations](#known-limitations)
 and [Data Freshness and Caching](#data-freshness-and-caching).
 
-Overall: the product works end to end on real data and is deployed. UI refinement,
-end-to-end validation and security testing are in progress; submission materials
-have not started. The previously documented spend was about 152 of 1,000 Sectors
-credits through 2026-10-02. The latest 2026-10-05 source cross-check spent 7 additional
-local credits; production spend for that run was not measured. Reconcile the local
-and Redis ledgers with the Sectors dashboard before reporting the remaining budget.
+Overall: the product works end to end on real data and is deployed; validation and
+security testing are done; submission materials have not started. The previously
+documented spend was about 152 of 1,000 Sectors credits through 2026-10-02, plus 7
+local credits on 2026-10-05 and at most 28 tool calls on 2026-10-07; production spend
+in between was not measured. Reconcile the local and Redis ledgers with the Sectors
+dashboard before reporting the remaining budget.
 
-**Latest validation (2026-10-05):** 13 distinct questions through the deployed
-website's API proxy; 18 numeric checks and 2 calendar checks passed. Six defects
-were fixed in the local repository, and the four main fixes passed local proxy
-retests with real-data replay. **These fixes have not been deployed; visual browser
-checks and post-deployment retests are still pending.** See the
-[validation report](docs/e2e-validation-2026-10-05.md).
+**Latest validation (2026-10-07):** the 5 October fixes pass in production; screener
+NPL, unknown ticker, company name and non-bank sector discovery checked live; a real
+Groq 429 fell back to deterministic synthesis; desktop browser checks, deployment
+protections, prompt injection, `pip-audit`, `npm audit` and a Git history secret scan
+done. One UI defect found and fixed (evidence for computed values). See the
+[validation report](docs/e2e-validation-2026-10-07.md) and the
+[5 October report](docs/e2e-validation-2026-10-05.md).
 
 | Area | State | Details |
 |---|---|---|
@@ -39,13 +41,13 @@ checks and post-deployment retests are still pending.** See the
 | Deterministic analytics, evidence validation, sufficiency assessment | Done | No LLM arithmetic; unsupported claims are rejected and reported as data gaps |
 | FastAPI backend | Done | `GET /health`, `GET /v1/capabilities`, `POST /v1/agent/query` |
 | Sectors data | Done | Real v2 REST adapter for the 8 endpoints the agent needs, with credit guardrails; verified live on 2026-09-27 (real-data evaluation 8/8). Fictional mock data for tests |
-| Runtime LLM | In use | Groq `openai/gpt-oss-120b` in production, verified on every LLM path; deterministic rules take over without it. Gemini is supported but verified for synthesis only. The team has not formally closed the provider choice (Phase 6) |
+| Runtime LLM | In use | Groq `openai/gpt-oss-120b` in production, verified on every LLM path, including a real 429 that fell back to the rules; deterministic rules take over without it. Gemini is supported but verified for synthesis only. Groq stays for the submission unless the team decides otherwise |
 | Languages | Done | Indonesian and English, detected from each question; the answer and the interface follow it (the ID/EN toggle still sets the interface). Other scripts (e.g. Japanese) get a short bilingual "Indonesian and English only" reply |
 | Frontend (Next.js) | Implemented; refinement ongoing | Bilingual landing page with a sticky section menu and banking glossary; watchlist; full per-browser history; peer small multiples and evidence-backed trend line; replies for non-research questions; a context-aware follow-up per result; reorderable widgets; evidence explorer and agent trace (see [frontend/README.md](frontend/README.md)) |
 | Deployment (Vercel) | Done | Live since 2026-10-02 at https://idx-insight.vercel.app; see [Deployment](#deployment-vercel) |
 | Deployment protections | Done | Firewall rules, shared secret, Redis credit ledger and caches, per-client and daily limits, LLM cap, security headers |
-| Security testing | In progress | Local regression checks pass. A live fabricated-number injection and an advice request passed on 2026-10-05; broader live injection tests, Python dependency audit, GitHub secret scanning and runtime log review remain |
-| End-to-end validation (Phase 6) | In progress | Earlier real-data runs and scope evaluation 44/44; latest deployment run: 13 questions, 18 numeric and 2 calendar checks passed. Local fixes verified; deployment retests and visual checks pending. See [latest report](docs/e2e-validation-2026-10-05.md) |
+| Security testing | Done (log review open) | Deployment protections re-tested live; prompt injection (system-prompt extraction, fake role blocks, injected buy text) fails; Redis outage fails closed; `pip-audit` clean; `npm audit` one build-time-only finding; Git history scan clean. GitHub secret scanning and push protection enabled. Open: review Vercel runtime logs |
+| End-to-end validation (Phase 6) | Done (mobile check open) | Real-data runs, scope evaluation 44/44, 5 Oct cross-checks and 7 Oct post-deployment retests, endpoint coverage and desktop browser checks. See [latest report](docs/e2e-validation-2026-10-07.md) |
 | Demo and submission (Phase 7) | Not started | Videos, problem statement, social post, submission form |
 
 ## Tech Stack
@@ -717,23 +719,23 @@ To run the API and the UI, see
 - The analysis is built for banks: the bank metrics (NIM, CASA, LDR, CAR, NPL,
   cost-to-income) are marked not applicable for other companies. Non-bank companies
   work by ticker (TLKM, ISAT and ASII were tested on the deployment: ROA, ROE, growth,
-  disclosures), but other sectors are recognised only when named by ticker, not by
-  sector name.
-- The latest deployment run cross-checked annual ratios, quarterly growth and the
-  scheduled calendar against raw Sectors responses. Full deployed coverage of the
-  screener (NPL), sub-sector list, report dates and sector-wide discovery still needs
-  explicit endpoint-level verification. Values have not been independently checked
-  against the Sectors app or issuer financial statements. Sectors does not document
-  the definition or unit of `cost_to_income_ratio`; source fidelity alone does not
-  establish that the ratio's interpretation is correct.
+  disclosures). Sector-wide discovery also works for a non-bank sector named in
+  words ("sektor telekomunikasi", checked live on 2026-10-07).
+- Deployment runs cross-checked annual ratios, quarterly growth and the scheduled
+  calendar against raw Sectors responses, and exercised 7 of the 9 allowlisted
+  Sectors tools on the deployment (2026-10-07). Values have not been independently checked against the Sectors app or
+  issuer financial statements. Sectors documents `cost_to_income_ratio` (and NIM, CASA,
+  LDR, CAR) without a definition or unit; the product shows Sectors' value as reported
+  and drops a company whose series mixes units, but cannot confirm the interpretation.
 - Only Indonesian and English are supported.
 - The LLM routes unclear messages, so the same message can occasionally land in a
   neighbouring category or come without a suggested question. Basic identity and
-  off-topic cases passed live, but a capability question with the default watchlist
-  incorrectly triggered research. That fix is local and awaits deployment; passing
-  the scope evaluation does not guarantee every unseen phrasing is routed correctly.
-- A capitalised four-letter word in a message (e.g. "HALO") is still checked as a
-  ticker and can cost a credit before the message is classified.
+  off-topic and capability cases pass live (the capability fix was deployed and
+  retested on 2026-10-07); passing the scope evaluation does not guarantee every
+  unseen phrasing is routed correctly.
+- A capitalised four-letter word in a message (e.g. "HALO", "JSON", "BELI") is still
+  checked as a ticker and can cost a credit before the message is classified; inside
+  a research question it adds a "code not found" data gap and a `partial` status.
 - The daily LLM limit is checked before each run and recorded afterward, so it
   is an admission threshold rather than an atomic hard cap. Concurrent requests
   can overshoot it. An atomic per-call reservation remains to be implemented if
@@ -749,7 +751,7 @@ To run the API and the UI, see
 
 ## Remaining Work
 
-Phases are defined in [PHASE.md](PHASE.md); the project is currently in Phase 6.
+Phases are defined in [PHASE.md](PHASE.md); Phase 6 is done and Phase 7 (submission) is next.
 
 **Product UI (Phase 5)**
 - Done: bilingual landing page with a sticky section menu and glossary; free-ticker
@@ -763,60 +765,51 @@ Phases are defined in [PHASE.md](PHASE.md); the project is currently in Phase 6.
 - A dedicated multi-period API series would let the trend chart cover more than
   the historical ratio evidence already present in one research response.
 
-**End-to-end validation (Phase 6, in progress)**
-- Done: a local and a deployed real-data run, 10 questions including non-bank and
-  English questions (see [docs/e2e-validation.md](docs/e2e-validation.md))
-- Done: ratio-unit fix deployed and re-checked; real-data evaluation re-run (6/8 live,
-  31 credits; 8/8 after the expectation fix); failure cases for invalid input, missing
-  secret, firewall rate limit, credit cap, offline
-- Done (2026-10-05, local): non-research questions, capability questions and other
-  languages are routed without Sectors calls; scope evaluation 44/44
-- Done (2026-10-05, deployment proxy): 13 distinct questions, including identity,
-  off-topic, capability, growth, invalid date, non-bank NIM in English, advice,
-  fabricated-number injection, ambiguous company and unsupported script. Source
-  cross-checks: 18 numeric and 2 calendar checks passed; rate-limit rejection, input
-  validation and answer-cache reuse observed. See [report](docs/e2e-validation-2026-10-05.md).
-- Fixed locally: capability/watchlist routing, omitted revenue growth and unwanted
-  metric bundles, duplicate unavailable-period gaps for malformed ratios, invalid
-  calendar-date crash, inaccurate watchlist wording, and repeated narrative text.
-  Four main fixes passed an actual local Next.js proxy to FastAPI replay retest.
-- **Next: deploy the fixes and retest cases 3, 4, 5, 7 and 11 with new wording**
-  to avoid responses cached before the fixes. Verify the active Groq path and the
-  fallback path separately; local fix retests used rules-only real-data replay.
-- **Next: browser verification** of question submission, progress/error messages,
-  peer and trend charts, evidence/trace display, watchlist edits, IndexedDB history
-  after reload, language switching and mobile layout. The latest run had no browser
-  surface and did not verify these interactions.
-- Still open: clarify Sectors' `cost_to_income_ratio` definition/unit; compare a
-  sample against the Sectors app or issuer reports.
-- Still open: explicit deployed coverage of all Sectors endpoints, NPL/screener,
-  sector-wide discovery, unknown tickers, missing/stale/conflicting data and period
-  alignment. Mock regression coverage is not a substitute for live checks.
-- Still open: actual Groq 429, Redis unavailable and timeout behavior on the deployed
-  flow. Use an isolated test deployment for disruptive failure scenarios.
-- Partial: per-request latency recorded for this sample; production credits were
-  not measured. Record cache hits, LLM fallback and source credits, and compare
-  repeated runs by question type before making performance/capacity claims.
-- Final runtime LLM provider and model
+**End-to-end validation (Phase 6, done)**
+- Done: local and deployed real-data runs (2 Oct), ratio-unit fix and real-data
+  evaluation 8/8, failure cases for invalid input, missing secret, firewall rate limit,
+  credit cap and offline backend (see [docs/e2e-validation.md](docs/e2e-validation.md))
+- Done (2026-10-05): non-research routing with scope evaluation 44/44; 13 production
+  questions with 18 numeric and 2 calendar cross-checks against raw Sectors responses
+  ([report](docs/e2e-validation-2026-10-05.md))
+- Done (2026-10-07, production): the five 5 October fixes retested with new wording;
+  screener NPL, unknown ticker, company name and non-bank sector discovery (7 of the
+  9 allowlisted Sectors tools); a real Groq 429 fell back to deterministic synthesis; the
+  per-client limit and its UI message; desktop browser checks of the question box,
+  language switching, history after reload, charts, metric table and trace drawer
+  ([report](docs/e2e-validation-2026-10-07.md))
+- Fixed (2026-10-07, `frontend` branch): evidence drawer for computed peer values
+  (growth, NPL); local `127.0.0.1` dev access (merged)
+- Closed: `cost_to_income_ratio` has no definition or unit in the Sectors docs; the
+  value is shown as reported, mixed-unit series are dropped (Known Limitations)
+- Runtime LLM for the submission: Groq `openai/gpt-oss-120b` (the production model,
+  verified on every path), unless the team decides otherwise
+- Done (2026-10-07): mobile landing checked at 375 px; the hero "RESEARCH AGENT"
+  label now stays on one centred line
+- Open (team): merge the `frontend` fixes to `main`; reconcile Sectors spend with the dashboard and keep the
+  judging-period reserve (see Phase 7)
+- Not tested live by design: timeouts and a Redis outage on the production deployment
+  (disruptive); a Redis outage fails closed locally (HTTP 503)
 
-**Security checks (Phase 6, in progress)**
+**Security checks (Phase 6, done)**
 - Local regression tests cover fabricated cited narrative, prompt section injection,
   forged proxy IP, cross-origin requests, oversized JSON, mandatory agent steps and
-  invalid source links; auth and quota tests pass. A tracked-file key-pattern scan
-  found no matches; it did not scan Git history.
-- The LLM selects cited items without publishing its own prose, and source-provided
-  event titles do not enter the second-hop decision prompt (deployed with the
-  2026-10-05 release).
-- Done live (2026-10-05): an instruction to invent BBCA ROE of 999% did not change
-  the source-backed answer; an unscoped buy request received the advice boundary
-  without a Sectors call. Still open: broader injection coverage, system-prompt
-  extraction, source-supplied instructions and HTML/script handling in the browser.
-- Independent re-test of the deployment protections (missing or wrong key, spoofed
-  client IP, per-client and firewall limits, keys or backend URL in the browser)
-- `pip-audit` for backend dependencies (`npm audit --omit=dev` reported no
-  vulnerabilities on 2026-10-05)
-- GitHub secret scanning and push protection on the public repository
-- Review of the Vercel runtime logs for secrets
+  invalid source links; auth and quota tests pass. The LLM selects cited items without
+  publishing its own prose, and source-provided event titles do not enter the
+  second-hop decision prompt.
+- Done live (2026-10-05): an instruction to invent BBCA ROE of 999% and an unscoped buy
+  request were both handled correctly.
+- Done (2026-10-07): deployment protections re-tested (no key 403, wrong key 401, proxy
+  input checks, no keys or backend URL in the production HTML/JS); prompt injection
+  with system-prompt extraction, a fake role block, injected buy text and a "DAN"
+  jailbreak (all failed, live Groq); HTML/script in questions not rendered as markup;
+  Redis outage fails closed; `pip-audit` clean; `npm audit --omit=dev` one high
+  finding in build-time `source-map-js` only; Git history scan of all branches found no
+  committed key or secret file
+- Done (2026-10-07): GitHub secret scanning and push protection enabled on the
+  repository; no open secret-scanning alerts
+- Open (Vercel admin): review the Vercel runtime logs of the last week for secrets. The single `GROQ_API_KEY=gsk-…` match in Git history was
+  confirmed by the team as a placeholder (`.env.example` has no key)
 
 **Demo and submission (Phase 7, not started)**
 - One-sentence problem statement; one-minute teaser; judging video of up to three

@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**Current phase: 6 — End-to-End Validation (in progress as of 2026-10-05).**
+**Current phase: 7 — Demo & Submission Preparation (Phase 6 done on 2026-10-07).**
 
 This document describes the complete project roadmap.
 Future phases are documented for planning and team coordination.
@@ -15,8 +15,8 @@ Future phases are documented for planning and team coordination.
 | 3 | Analytics & Validation | Implemented (mock data) |
 | 4 | Real Sectors Integration | Implemented |
 | 5 | Product UI | Implemented (deployed) |
-| 6 | End-to-End Validation | In progress |
-| 7 | Demo & Submission Preparation | Planned |
+| 6 | End-to-End Validation | Done (team actions open, see Phase 6 → Status) |
+| 7 | Demo & Submission Preparation | In progress |
 
 Hackathon: SECTORS Hackathon 2026 — Track: AI Agents & Assistants.
 Deadline: 8 October 2026, 23:59 WIB (submission and code freeze).
@@ -258,8 +258,8 @@ Next.js UI and inspect evidence and the execution trace.
   detection, Indonesian/English toggle, progress and error states, bank logos, peer bar
   charts and an evidence-backed trend line when multiple periods exist. Overview,
   Disclosure, Peer lens and Company context widgets can be reordered and reset.
-- The deployed `main` build is separate from the current uncommitted workspace;
-  current-source changes still need a fresh build and deployment verification.
+- The 5 October fixes were deployed from `main` and retested in production on
+  2026-10-07; one later UI fix (evidence for computed values) is on `frontend`.
 
 ---
 
@@ -294,8 +294,9 @@ User
 ### Dependencies
 Phases 4 and 5.
 
-### Status (updated 2026-10-05)
-In progress. Recorded in `docs/e2e-validation.md`:
+### Status (updated 2026-10-07)
+Done; the remaining items need a team member with repository or Vercel admin access.
+Recorded in `docs/e2e-validation.md`:
 
 - Runs 1–3 (2026-10-02, real data, local and deployed): 11 questions including
   non-bank companies and English; real-data evaluation 8/8; failure cases (invalid
@@ -311,17 +312,22 @@ In progress. Recorded in `docs/e2e-validation.md`:
   Preview no longer reaches the production backend (backend variables are
   Production-only).
 
-Open:
-- the definition and unit of Sectors' `cost_to_income_ratio`, and a sample of values
-  cross-checked against the Sectors app
-- every Sectors endpoint through the deployed product (sector-wide discovery, NPL via
-  the screener, ambiguous names, unknown tickers); other sectors by name
-- failure cases still to test live: Groq rate limit, Redis unavailable, timeouts;
-  latency and credits per question type
-- security checks: prompt injection against the live LLM, `pip-audit`, GitHub secret
-  scanning and push protection, runtime log review
-- a credit reserve for the judging period
-- final runtime LLM provider and model (Groq `openai/gpt-oss-120b` runs in production)
+- Run 5 (2026-10-07, production, real data and Groq): the five 5 October fixes pass
+  after deployment; screener NPL, unknown ticker, company name and non-bank sector
+  discovery exercise 7 of the 9 allowlisted Sectors tools; a real Groq 429 fell back to the rules;
+  desktop browser checks passed and found one defect (evidence for computed values),
+  fixed on `frontend`. Security: deployment protections re-tested, prompt injection
+  (system-prompt extraction, role blocks, injected buy text, jailbreak) failed, Redis
+  outage fails closed, `pip-audit` clean, `npm audit` one build-time-only finding,
+  Git history secret scan clean. `cost_to_income_ratio` is undocumented upstream and
+  is shown as reported. See `docs/e2e-validation-2026-10-07.md`.
+- Runtime LLM for the submission: Groq `openai/gpt-oss-120b`, unless the team decides
+  otherwise.
+
+Open (team):
+- merge the `frontend` evidence fix into `main`
+- review the Vercel runtime logs for secrets
+- reconcile Sectors spend with the dashboard and keep the judging-period reserve
 
 ---
 
@@ -460,10 +466,11 @@ The project must:
 
 ## Current Boundary
 
-**Currently in Phase 6.**
+**Currently in Phase 7.**
 
 Phase 5 is implemented: the product is deployed on Vercel with the deployment
-protections and UI listed under Phase 5 (see Phase 5 → Progress). Phase 6 started on
-2026-10-02 by team decision (first run in docs/e2e-validation.md) and includes local
-security regressions as of 2026-10-05. Live security retests are still open.
-Phase 7 is planned.
+protections and UI listed under Phase 5 (see Phase 5 → Progress). Phase 6 ran from
+2026-10-02 to 2026-10-07 (docs/e2e-validation.md), including live security retests;
+its open items are team actions listed under Phase 6 → Status. Phase 7 (videos,
+problem statement, social post, submission form) is in progress; submissions close
+on 8 October 2026, 23:59 WIB.

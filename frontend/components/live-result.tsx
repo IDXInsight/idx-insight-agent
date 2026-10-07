@@ -6,7 +6,7 @@ import TrendChart from "@/components/trend-chart";
 import TickerMark from "@/components/ticker-mark";
 import { DraggableWidgetGrid } from "@/components/ui/draggable-widget-grid";
 import { AlertTriangle, ArrowRight, ArrowUpRight, Check, CircleHelp, Clock3, ListFilter, Search, ShieldCheck, Sparkles } from "lucide-react";
-import { type AgentEvent, type AgentResponse, type EvidenceItem, type MetricInfo, dayMonth, formatPercent, periodLabel } from "@/lib/agent";
+import { type AgentEvent, type AgentResponse, type EvidenceItem, type MetricInfo, claimForValue, dayMonth, formatPercent, isValueClaim, periodLabel } from "@/lib/agent";
 import { type Lang, type MessageKey, eventTypeLabels, t } from "@/lib/i18n";
 
 /** What the evidence drawer shows for a live finding: the claim plus the evidence rows it cites. */
@@ -53,7 +53,7 @@ export default function LiveResult({ result, metrics, colorOrder, onEvidence, on
   // Single-company values already shown in the peer table are not repeated as findings.
   const inTable = (claimIds: string[]) => claimIds.length > 0 && claimIds.every(id => {
     const c = claims.get(id);
-    return c?.kind === "metric" && !!c.metric && c.metric in result.peer_comparison;
+    return !!c && isValueClaim(c) && !!c.metric && c.metric in result.peer_comparison;
   });
   const sections = briefing.sections
     .map(section => ({ ...section, findings: section.findings.filter(f => !inTable(f.claim_ids)) }))
@@ -70,7 +70,7 @@ export default function LiveResult({ result, metrics, colorOrder, onEvidence, on
     });
   }
   function openPeerValue(metric: string, symbol: string) {
-    const claim = result.claims.find(c => c.kind === "metric" && c.metric === metric && c.symbols.includes(symbol));
+    const claim = claimForValue(result.claims, metric, symbol);
     if (claim) openClaims([claim.claim_id], claim.statement);
   }
   function openEvent(event: AgentEvent) {
