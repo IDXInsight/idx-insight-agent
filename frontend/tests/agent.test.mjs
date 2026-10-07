@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dayMonth, formatEvidenceValue, isUrl, periodLabel, viewForIntent } from "../lib/agent.ts";
+import { claimForValue, dayMonth, formatEvidenceValue, isUrl, periodLabel, viewForIntent } from "../lib/agent.ts";
+
+test("finds the evidence claim for reported and computed peer values", () => {
+  const claim = (claim_id, kind, metric, symbols) => ({ claim_id, kind, metric, symbols, statement: "", period: null, evidence_ids: [] });
+  const claims = [
+    claim("cl-1", "calculation", "earnings_growth_yoy", ["BBRI"]),
+    claim("cl-2", "comparison", "earnings_growth_yoy", ["BBRI", "BBCA"]),
+    claim("cl-3", "calculation", "earnings_growth_yoy", ["BBCA"]),
+    claim("cl-4", "metric", "roe", ["BBCA"]),
+  ];
+  assert.equal(claimForValue(claims, "earnings_growth_yoy", "BBCA")?.claim_id, "cl-3");
+  assert.equal(claimForValue(claims, "earnings_growth_yoy", "BBRI")?.claim_id, "cl-1");
+  assert.equal(claimForValue(claims, "roe", "BBCA")?.claim_id, "cl-4");
+  assert.equal(claimForValue(claims, "roe", "BBRI"), undefined);
+});
 
 test("maps agent intents to result views", () => {
   assert.equal(viewForIntent("discovery", "peers"), "discovery");
