@@ -8,6 +8,7 @@ import { DraggableWidgetGrid } from "@/components/ui/draggable-widget-grid";
 import { AlertTriangle, ArrowRight, ArrowUpRight, Check, CircleHelp, Clock3, ListFilter, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { type AgentEvent, type AgentResponse, type EvidenceItem, type MetricInfo, claimForValue, dayMonth, formatPercent, isValueClaim, periodLabel } from "@/lib/agent";
 import { type Lang, type MessageKey, eventTypeLabels, t } from "@/lib/i18n";
+import { buildTrends } from "@/lib/trends";
 
 /** What the evidence drawer shows for a live finding: the claim plus the evidence rows it cites. */
 export type LiveEvidence = {
@@ -46,6 +47,8 @@ export default function LiveResult({ result, metrics, colorOrder, onEvidence, on
   const metricLabel = (metric: string) => metrics[metric]?.[lang] ?? metric;
   const { briefing } = result;
   const peers = Object.values(result.peer_comparison);
+  // The trend widget appears only when the evidence holds at least two periods of a ratio.
+  const hasTrend = peers.length > 0 && buildTrends(result, colorOrder).length > 0;
   const peerSymbols = [...new Set(peers.flatMap(p => [...Object.keys(p.values), ...p.missing]))];
   const eventTypes = [...new Set(result.events.map(e => typeLabel(e.event_type)))];
   const events = result.events.filter(e => filter === null || typeLabel(e.event_type) === filter);
@@ -90,7 +93,7 @@ export default function LiveResult({ result, metrics, colorOrder, onEvidence, on
       <div className="briefing-bottom"><span><ShieldCheck size={14} /> {t(lang, "live.accepted", { n: result.validation.accepted })}{result.validation.rejected ? t(lang, "live.rejected", { n: result.validation.rejected }) : ""}</span><button className="text-button" onClick={onTrace}>{t(lang, "live.trace")} <ArrowRight size={14} /></button></div>
     </section>
 
-    {peers.length > 0 && <TrendChart key="trend" result={result} info={metrics} order={colorOrder} lang={lang} onEvidence={onEvidence} />}
+    {hasTrend && <TrendChart key="trend" result={result} info={metrics} order={colorOrder} lang={lang} onEvidence={onEvidence} />}
     {peers.length > 0 && <PeerChart key="bars" metrics={peers} order={colorOrder} info={metrics} lang={lang} onEvidence={openPeerValue} />}
 
     {peers.length > 0 && <section key="table" className="panel peer-panel"><div className="section-header"><div><span className="eyebrow">{t(lang, "live.peerEyebrow")}</span><h2>{t(lang, "live.peerTitle")}</h2></div><span className={`status-pill ${peers.every(p => p.aligned) ? "" : "warn"}`}>{peers.every(p => p.aligned) ? <><Check size={12} /> {t(lang, "live.aligned")}</> : <><AlertTriangle size={12} /> {t(lang, "live.notAligned")}</>}</span></div>
